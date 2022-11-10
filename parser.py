@@ -1,13 +1,19 @@
 import json
 import os
 
-def read_twitter_archive(folder):
-    with open(os.path.join(folder, 'data', 'tweet.js'), 'r', encoding='utf8') as f:
+def read_json_from_js_file(filename):
+    """Reads the contents of a Twitter-produced .js file into a dictionary."""
+    with open(filename, 'r', encoding='utf8') as f:
         data = f.readlines()
         # convert js file to JSON: replace first line with just '[', squash lines into a single string
         data = '[' + ''.join(data[1:])
-        # parse the resulting JSON
+        # parse the resulting JSON and return as a dict
         return json.loads(data)
+
+def extract_username(account_js_filename):
+    """Returns the user's Twitter username from account.js."""
+    account = read_json_from_js_file(account_js_filename)
+    return account[0]['account']['username']
 
 def extract_tweet(tweet, username):
     tweet = tweet['tweet']
@@ -32,15 +38,17 @@ def extract_tweet(tweet, username):
 def main():
 
     input_folder = '.'
-    username = '_tim_hutton_'
     output_filename = 'output.txt'
 
-    json = read_twitter_archive(input_folder)
+    account_js_filename = os.path.join(input_folder, 'data', 'account.js')
+    username = extract_username(account_js_filename)
+    tweets_js_filename = os.path.join(input_folder, 'data', 'tweet.js')
+    json = read_json_from_js_file(tweets_js_filename)
     tweets_text = [extract_tweet(tweet, username) for tweet in json]
     all_tweets = '\n--\n'.join(tweets_text)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Parsed {len(json)} tweets. Wrote to', output_filename)
+    print(f'Parsed {len(json)} tweets for {username}. Wrote to', output_filename)
 
 if __name__ == "__main__":
     main()
