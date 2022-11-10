@@ -84,13 +84,13 @@ def main():
             exit()
         json = read_json_from_js_file(tweets_js_filename)
         tweets_markdown += [tweet_json_to_markdown(tweet, username) for tweet in json]
-    print(f'Parsed {len(tweets_markdown)} tweets by {username}.')
+    print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
 
     # Save as one large markdown file
     all_tweets = '\n----\n'.join(tweets_markdown)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Wrote to {output_filename}')
+    print(f'Wrote to {output_filename}, which embeds images from {data_folder}')
 
 if __name__ == "__main__":
     main()
