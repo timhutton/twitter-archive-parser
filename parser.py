@@ -68,6 +68,7 @@ def main():
 
     # Parse the tweets
     data_folder = os.path.join(input_folder, 'data')
+    tweet_media_folder = os.path.join(data_folder, 'tweet_media')
     account_js_filename = os.path.join(data_folder, 'account.js')
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
@@ -90,7 +91,7 @@ def main():
     all_tweets = '\n----\n'.join(tweets_markdown)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Wrote to {output_filename}, which embeds images from {data_folder}')
+    print(f'Wrote to {output_filename}, which embeds images from {tweet_media_folder}')
 
 if __name__ == "__main__":
     main()
