@@ -11,3 +11,4 @@ Features:
 TODO:
 - Output as Jekyll markdown files
 - Output as HTML files
+- Embed videos as HTML snippets in the markdown (currently just the thumbnail is shown)
