@@ -72,7 +72,7 @@ def main():
     username = extract_username(account_js_filename)
     input_filenames = glob.glob(os.path.join(data_folder, 'tweet.js')) + \
         glob.glob(os.path.join(data_folder, 'tweets.js')) + \
-        glob.glob(os.path.join(data_folder, 'tweet-part*.js'))
+        glob.glob(os.path.join(data_folder, 'tweets-part*.js'))
     tweets_markdown = []
     for tweets_js_filename in input_filenames:
         print(f'Parsing {tweets_js_filename}...')
