@@ -45,7 +45,7 @@ def main():
     output_filename = 'output.md'
 
     # Parse the tweets
-    tweets_js_filename = os.path.join(input_folder, 'data', 'tweet.js')
+    tweets_js_filename = os.path.join(input_folder, 'data', 'tweets.js')
     if not os.path.isfile(tweets_js_filename):
         print(f'Error: Failed to load {tweets_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
