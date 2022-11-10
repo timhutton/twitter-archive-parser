@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
     twitter-archive-parser - Python code to parse a Twitter archive and output in various ways
     Copyright (C) 2022  Tim Hutton
