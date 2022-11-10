@@ -44,16 +44,19 @@ def tweet_json_to_markdown(tweet, username):
     body = tweet['full_text']
     tweet_id_str = tweet['id_str']
     # replace t.co URLs with their original versions
-    for url in tweet['entities']['urls']:
-        body = body.replace(url['url'], url['expanded_url'])
+    if 'entities' in tweet and 'urls' in tweet['entities']:
+        for url in tweet['entities']['urls']:
+            if 'url' in url and 'expanded_url' in url:
+                body = body.replace(url['url'], url['expanded_url'])
     # replace image URLs with markdown image links to local files
-    if 'media' in tweet['entities']:
+    if 'entities' in tweet and 'media' in tweet['entities']:
         for media in tweet['entities']['media']:
-            original_url = media['url']
-            original_filename = os.path.split(media['media_url'])[1]
-            new_filename = 'data/tweet_media/' + tweet_id_str + '-' + original_filename
-            markdown = f'![]({new_filename})'
-            body = body.replace(original_url, markdown)
+            if 'url' in media and 'media_url' in media:
+                original_url = media['url']
+                original_filename = os.path.split(media['media_url'])[1]
+                new_filename = 'data/tweet_media/' + tweet_id_str + '-' + original_filename
+                markdown = f'![]({new_filename})'
+                body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp}](https://twitter.com/{username}/status/{tweet_id_str}))'
     return body
