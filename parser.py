@@ -82,9 +82,6 @@ def main():
     tweets_markdown = []
     for tweets_js_filename in input_filenames:
         print(f'Parsing {tweets_js_filename}...')
-        if not os.path.isfile(tweets_js_filename):
-            print(f'Error: Failed to load {tweets_js_filename}. Start this script in the root folder of your Twitter archive.')
-            exit()
         json = read_json_from_js_file(tweets_js_filename)
         tweets_markdown += [tweet_json_to_markdown(tweet, username) for tweet in json]
     print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
