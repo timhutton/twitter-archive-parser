@@ -6,7 +6,10 @@ def read_json_from_js_file(filename):
     with open(filename, 'r', encoding='utf8') as f:
         data = f.readlines()
         # convert js file to JSON: replace first line with just '[', squash lines into a single string
-        data = '[' + ''.join(data[1:])
+        prefix = '['
+        if '{' in data[0]:
+            prefix += ' {'
+        data =  prefix + ''.join(data[1:])
         # parse the resulting JSON and return as a dict
         return json.loads(data)
 
