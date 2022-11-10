@@ -8,3 +8,6 @@ Features:
 - Outputs as markdown with embedded images and links
 - Replaces t.co URLs with their original versions
 
+TODO:
+- Output as Jekyll markdown files
+- Output as HTML files
