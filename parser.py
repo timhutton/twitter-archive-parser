@@ -15,7 +15,8 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
-def extract_tweet(tweet, username):
+def tweet_json_to_markdown(tweet, username):
+    """Converts a JSON-format tweet into markdown."""
     tweet = tweet['tweet']
     timestamp = tweet['created_at']
     body = tweet['full_text']
@@ -28,27 +29,34 @@ def extract_tweet(tweet, username):
         for media in tweet['entities']['media']:
             original_url = media['url']
             original_filename = os.path.split(media['media_url'])[1]
-            new_filename = 'tweet_media/' + tweet_id_str + '-' + original_filename
+            new_filename = 'data/tweet_media/' + tweet_id_str + '-' + original_filename
             markdown = f'![]({new_filename})'
             body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
-    body += f'\n\nOriginally on Twitter: [{timestamp}](https://twitter.com/{username}/status/{tweet_id_str})'
+    body += f'\n\n(Originally on Twitter: [{timestamp}](https://twitter.com/{username}/status/{tweet_id_str}))'
     return body
 
 def main():
 
     input_folder = '.'
-    output_filename = 'output.txt'
+    output_filename = 'output.md'
 
+    # Parse the tweets
+    tweets_js_filename = os.path.join(input_folder, 'data', 'tweet.js')
+    if not os.path.isfile(tweets_js_filename):
+        print(f'Error: Failed to load {tweets_js_filename}. Start this script in the root folder of your Twitter archive.')
+        exit()
+    json = read_json_from_js_file(tweets_js_filename)
     account_js_filename = os.path.join(input_folder, 'data', 'account.js')
     username = extract_username(account_js_filename)
-    tweets_js_filename = os.path.join(input_folder, 'data', 'tweet.js')
-    json = read_json_from_js_file(tweets_js_filename)
-    tweets_text = [extract_tweet(tweet, username) for tweet in json]
-    all_tweets = '\n--\n'.join(tweets_text)
+    tweets_markdown = [tweet_json_to_markdown(tweet, username) for tweet in json]
+    print(f'Parsed {len(json)} tweets by {username}.')
+
+    # Save as one large markdown file
+    all_tweets = '\n----\n'.join(tweets_markdown)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Parsed {len(json)} tweets for {username}. Wrote to', output_filename)
+    print(f'Wrote to {output_filename}')
 
 if __name__ == "__main__":
     main()
