@@ -16,6 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import datetime
 import glob
 import json
 import os
@@ -38,9 +39,10 @@ def extract_username(account_js_filename):
     return account[0]['account']['username']
 
 def tweet_json_to_markdown(tweet, username):
-    """Converts a JSON-format tweet into markdown."""
+    """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
     tweet = tweet['tweet']
-    timestamp = tweet['created_at']
+    timestamp_str = tweet['created_at']
+    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
     body = tweet['full_text']
     tweet_id_str = tweet['id_str']
     # replace t.co URLs with their original versions
@@ -58,8 +60,8 @@ def tweet_json_to_markdown(tweet, username):
                 markdown = f'![]({new_filename})'
                 body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
-    body += f'\n\n(Originally on Twitter: [{timestamp}](https://twitter.com/{username}/status/{tweet_id_str}))'
-    return body
+    body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
+    return timestamp, body
 
 def main():
 
@@ -86,6 +88,10 @@ def main():
         json = read_json_from_js_file(tweets_js_filename)
         tweets_markdown += [tweet_json_to_markdown(tweet, username) for tweet in json]
     print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
+
+    # Sort tweets with oldest first
+    tweets_markdown.sort(key=lambda tup: tup[0])
+    tweets_markdown = [md for t,md in tweets_markdown] # discard timestamps
 
     # Save as one large markdown file
     all_tweets = '\n----\n'.join(tweets_markdown)
