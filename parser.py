@@ -16,6 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import glob
 import json
 import os
 
@@ -63,15 +64,24 @@ def main():
     output_filename = 'output.md'
 
     # Parse the tweets
-    tweets_js_filename = os.path.join(input_folder, 'data', 'tweet.js')
-    if not os.path.isfile(tweets_js_filename):
-        print(f'Error: Failed to load {tweets_js_filename}. Start this script in the root folder of your Twitter archive.')
+    data_folder = os.path.join(input_folder, 'data')
+    account_js_filename = os.path.join(data_folder, 'account.js')
+    if not os.path.isfile(account_js_filename):
+        print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
-    json = read_json_from_js_file(tweets_js_filename)
-    account_js_filename = os.path.join(input_folder, 'data', 'account.js')
     username = extract_username(account_js_filename)
-    tweets_markdown = [tweet_json_to_markdown(tweet, username) for tweet in json]
-    print(f'Parsed {len(json)} tweets by {username}.')
+    input_filenames = glob.glob(os.path.join(data_folder, 'tweet.js')) + \
+        glob.glob(os.path.join(data_folder, 'tweets.js')) + \
+        glob.glob(os.path.join(data_folder, 'tweet-part*.js'))
+    tweets_markdown = []
+    for tweets_js_filename in input_filenames:
+        print(f'Parsing {tweets_js_filename}...')
+        if not os.path.isfile(tweets_js_filename):
+            print(f'Error: Failed to load {tweets_js_filename}. Start this script in the root folder of your Twitter archive.')
+            exit()
+        json = read_json_from_js_file(tweets_js_filename)
+        tweets_markdown += [tweet_json_to_markdown(tweet, username) for tweet in json]
+    print(f'Parsed {len(tweets_markdown)} tweets by {username}.')
 
     # Save as one large markdown file
     all_tweets = '\n----\n'.join(tweets_markdown)
