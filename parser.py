@@ -22,6 +22,8 @@ import glob
 import json
 import os
 import shutil
+import requests
+import time
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -39,6 +41,28 @@ def extract_username(account_js_filename):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
+
+def download_image(url, file_name):
+    if not os.path.isfile(file_name):
+        res = requests.get(url, stream = True)
+        if res.status_code == 200:
+            with open(file_name,'wb') as f:
+                shutil.copyfileobj(res.raw, f)
+            print('Image sucessfully Downloaded: ',file_name)
+            True
+        else:
+            print('Image Couldn\'t be retrieved: ' + url)
+            False
+    else:
+        print("Skipping image. already downloaded: " + file_name)
+        True
+
+def local_file_checked_markdown(local_filename, new_filename, original_url, original_expanded_url):
+    markdown = f'![]({new_filename})'
+    if not os.path.isfile(local_filename):
+        print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+        markdown = f'![]({original_url})'
+    return markdown
 
 def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
@@ -60,13 +84,32 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 original_expanded_url = media['media_url']
                 original_filename = os.path.split(original_expanded_url)[1]
                 local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
-                new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
-                if not os.path.isfile(local_filename):
-                    print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
-                    new_url = original_url
+                new_filename = output_media_folder_name + tweet_id_str + '-' + original_filename
+                # let's see if we can download the full-sized image
+                if media['media_url_https'] and media['media_url_https'].endswith('.jpg'):
+                    # some end with .mp4
+                    # media_url_https is https://pbs.twimg.com/media/AZO7q6fCAAEiCUD.jpg
+                    # but the full sized version can be acquired by
+                    # appending ?format=jpg&name=large
+                    full_url = media['media_url_https'] + '?format=jpg&name=large'
+                    full_filename = output_media_folder_name + tweet_id_str + '-full-' + original_filename
+                    markdown = f'![]({full_filename})'
+                    if download_image(full_url, full_filename):
+                        # just to minimize possibility of trigging some
+                        # auto-cutoff mechanism
+                        time.sleep(0.75)
+                    else:
+                        markdown = local_file_checked_markdown(local_filename,
+                                                                new_filename,
+                                                                original_url,
+                                                                original_expanded_url)
                 else:
-                    shutil.copy(local_filename, new_url)
-                markdown = f'![]({new_url})'
+                    markdown = local_file_checked_markdown(local_filename,
+                                                            new_filename,
+                                                            original_url,
+                                                            original_expanded_url)
+                if os.path.isfile(local_filename):
+                    shutil.copy(local_filename, new_filename)
                 body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
