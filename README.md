@@ -23,7 +23,7 @@ Our script does the following:
 ## TODO:
 - Output as separate markdown files for import into Jekyll or just for convenience. (Issues [#14](https://github.com/timhutton/twitter-archive-parser/issues/14) and [#15](https://github.com/timhutton/twitter-archive-parser/issues/15))
 - Output as HTML files?
-- Embed videos (Issue [#19](https://github.com/timhutton/twitter-archive-parser/issues/19)) as HTML snippets in the markdown (currently just the thumbnail is shown).
+- Embed videos (Issue [#19](https://github.com/timhutton/twitter-archive-parser/issues/19)) in the markdown, as HTML snippets if needed.
 - Provide a way to download the full-size images. ([Issue #16](https://github.com/timhutton/twitter-archive-parser/issues/16))
 
 ## Related tools:
