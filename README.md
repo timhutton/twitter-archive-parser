@@ -37,3 +37,5 @@ If our script doesn't do what you want then maybe a different tool will help:
 - https://github.com/jarulsamy/Twitter-Archive
 - https://sk22.github.io/twitter-archive-browser/
 - https://pypi.org/project/pleroma-bot/
+- https://github.com/mshea/Parse-Twitter-Archive
+- https://github.com/dangoldin/twitter-archive-analysis
