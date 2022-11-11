@@ -24,3 +24,15 @@ Our script does the following:
 - Output as HTML files?
 - Embed videos as HTML snippets in the markdown (currently just the thumbnail is shown).
 - Provide a way to download the full-size images. ([Issue #16](https://github.com/timhutton/twitter-archive-parser/issues/16))
+
+## Related tools:
+If our script doesn't do what you want then maybe a different tool will help:
+- https://github.com/selfawaresoup/twitter-tools
+- https://github.com/roobottom/twitter-archive-to-markdown-files
+- https://gist.github.com/divyajyotiuk/9fb29c046e1dfcc8d5683684d7068efe#file-get_twitter_bookmarks_v3-py
+- https://archive.alt-text.org/
+- https://observablehq.com/@enjalot/twitter-archive-tweets
+- https://github.com/woluxwolu/twint
+- https://github.com/jarulsamy/Twitter-Archive
+- https://sk22.github.io/twitter-archive-browser/
+- https://pypi.org/project/pleroma-bot/
