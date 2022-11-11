@@ -21,6 +21,7 @@ import datetime
 import glob
 import json
 import os
+import shutil
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -39,7 +40,7 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
-def tweet_json_to_markdown(tweet, username):
+def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
     tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
@@ -56,9 +57,16 @@ def tweet_json_to_markdown(tweet, username):
         for media in tweet['entities']['media']:
             if 'url' in media and 'media_url' in media:
                 original_url = media['url']
-                original_filename = os.path.split(media['media_url'])[1]
-                new_filename = 'data/tweet_media/' + tweet_id_str + '-' + original_filename
-                markdown = f'![]({new_filename})'
+                original_expanded_url = media['media_url']
+                original_filename = os.path.split(original_expanded_url)[1]
+                local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
+                new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
+                if not os.path.isfile(local_filename):
+                    print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                    new_url = original_url
+                else:
+                    shutil.copy(local_filename, new_url)
+                markdown = f'![]({new_url})'
                 body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
@@ -68,23 +76,41 @@ def main():
 
     input_folder = '.'
     output_filename = 'output.md'
+    output_media_folder_name = 'media/'
 
-    # Parse the tweets
+    # Identify the file and folder names - they change slightly depending on the archive size it seems
     data_folder = os.path.join(input_folder, 'data')
-    tweet_media_folder = os.path.join(data_folder, 'tweet_media')
     account_js_filename = os.path.join(data_folder, 'account.js')
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
+    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
+    input_filenames = []
+    for tweet_js_filename_template in tweet_js_filename_templates:
+        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
+    if len(input_filenames)==0:
+        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
+        exit()
+    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
+    tweet_media_folder_names = []
+    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
+        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
+    if len(tweet_media_folder_names)==0:
+        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    if len(tweet_media_folder_names) > 1:
+        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    archive_media_folder = tweet_media_folder_names[0]
+    os.makedirs(output_media_folder_name, exist_ok = True)
+
+    # Parse the tweets
     username = extract_username(account_js_filename)
-    input_filenames = glob.glob(os.path.join(data_folder, 'tweet.js')) + \
-        glob.glob(os.path.join(data_folder, 'tweets.js')) + \
-        glob.glob(os.path.join(data_folder, 'tweets-part*.js'))
     tweets_markdown = []
     for tweets_js_filename in input_filenames:
         print(f'Parsing {tweets_js_filename}...')
         json = read_json_from_js_file(tweets_js_filename)
-        tweets_markdown += [tweet_json_to_markdown(tweet, username) for tweet in json]
+        tweets_markdown += [tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name) for tweet in json]
     print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
 
     # Sort tweets with oldest first
@@ -95,7 +121,7 @@ def main():
     all_tweets = '\n----\n'.join(tweets_markdown)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Wrote to {output_filename}, which embeds images from {tweet_media_folder}')
+    print(f'Wrote to {output_filename}, which embeds images from {output_media_folder_name}')
 
 if __name__ == "__main__":
     main()
