@@ -39,7 +39,7 @@ jobs:
       # Build python script into a stand-alone exe
       - uses: Nuitka/Nuitka-Action@main
         with:
-          script-name: main.py
+          script-name: parser.py
           onefile: true
           disable-console: true
           
