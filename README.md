@@ -13,7 +13,7 @@ Flaws of the Twitter archive:
 - It shows you tweets you posted with images, but if you click on one of the images to expand it then it takes you to the Twitter website. If you are offline or have deleted your account or twitter.com is down then that won't work.
 - The tweets are stored in a complex JSON structure so you can't just copy them into your blog for example.
 - The images they give you are smaller than the ones you uploaded. I don't know why they would do this to us.
-- The links are all obfuscated in a short form using t.co, which hides their origin and redirects traffic to Twitter, giving them analytics.
+- The links are all obfuscated in a short form using t.co, which hides their origin and redirects traffic to Twitter, giving them analytics. Also they will stop working if t.co goes down.
 
 Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images and links. Currently it outputs a single monolithic markdown file but that can change.
