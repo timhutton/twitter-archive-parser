@@ -125,13 +125,36 @@ def main():
 
     # Sort tweets with oldest first
     tweets_markdown.sort(key=lambda tup: tup[0])
-    tweets_markdown = [md for t,md in tweets_markdown] # discard timestamps
-
-    # Save as one large markdown file
-    all_tweets = '\n----\n'.join(tweets_markdown)
+    # here begins my janky hackery to get this to output into yyyy-mm.md files
+    global lastyear
+    global all_tweets
+    global lastmonth
+    lastyear = 2006
+    lastmonth = 1
+    all_tweets = ""
+    for t,md in tweets_markdown:
+        dt = datetime.datetime.fromtimestamp(t)
+        currentyear = dt.year
+        currentmonth = dt.month
+        if (currentmonth != lastmonth ):
+            if (currentyear != lastyear):
+                output_filename = str(lastyear)+'-'+str(lastmonth)+'.md'
+                lastyear = currentyear
+            else:
+                output_filename = str(currentyear)+'-'+str(lastmonth)+'.md'
+            if (all_tweets != ""):
+                print('writing out to ' + output_filename)
+                with open(output_filename, 'w', encoding='utf-8') as f:
+                    f.write(all_tweets)
+            all_tweets = '\n----\n'+md
+            lastmonth = currentmonth
+        else:
+            all_tweets += '\n----\n'+md
+    output_filename = str(currentyear)+'-'+str(currentmonth)+'.md'
+    print('writing out to ' + output_filename)
     with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(all_tweets)
-    print(f'Wrote to {output_filename}, which embeds images from {output_media_folder_name}')
+
 
 if __name__ == "__main__":
     main()
