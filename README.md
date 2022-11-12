@@ -24,6 +24,7 @@ Our script does the following:
 - Output as separate markdown files for import into Jekyll or just for convenience. (Issues [#14](https://github.com/timhutton/twitter-archive-parser/issues/14) and [#15](https://github.com/timhutton/twitter-archive-parser/issues/15))
 - Output as HTML files?
 - Download the full-size images? ([Issue #16](https://github.com/timhutton/twitter-archive-parser/issues/16))
+- Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
 
 ## Related tools:
 If our script doesn't do what you want then maybe a different tool will help:
