@@ -16,14 +16,13 @@ Flaws of the Twitter archive:
 - The links are all obfuscated in a short form using t.co, which hides their origin and redirects traffic to Twitter, giving them analytics. Also they will stop working if t.co goes down.
 
 Our script does the following:
-- Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images, videos and links. Currently it outputs a single monolithic markdown file but that can change.
+- Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images, videos and links.
 - Replaces t.co URLs with their original versions
 - Copies used images to an output folder, to allow them to be moved to a new home
 
 ## TODO:
-- Output as separate markdown files for import into Jekyll or just for convenience. (Issues [#14](https://github.com/timhutton/twitter-archive-parser/issues/14) and [#15](https://github.com/timhutton/twitter-archive-parser/issues/15))
 - Output as HTML files?
-- Download the full-size images? ([Issue #16](https://github.com/timhutton/twitter-archive-parser/issues/16))
+- Download the full-size images? (Issue [#16](https://github.com/timhutton/twitter-archive-parser/issues/16))
 - Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
 
 ## Related tools:
