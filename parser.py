@@ -17,6 +17,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from collections import defaultdict
 import datetime
 import glob
 import json
@@ -85,7 +86,6 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
 def main():
 
     input_folder = '.'
-    output_filename = 'output.md'
     output_media_folder_name = 'media/'
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems
@@ -125,35 +125,19 @@ def main():
 
     # Sort tweets with oldest first
     tweets_markdown.sort(key=lambda tup: tup[0])
-    # here begins my janky hackery to get this to output into yyyy-mm.md files
-    global lastyear
-    global all_tweets
-    global lastmonth
-    lastyear = 2006
-    lastmonth = 1
-    all_tweets = ""
-    for t,md in tweets_markdown:
-        dt = datetime.datetime.fromtimestamp(t)
-        currentyear = dt.year
-        currentmonth = dt.month
-        if (currentmonth != lastmonth ):
-            if (currentyear != lastyear):
-                output_filename = str(lastyear)+'-'+str(lastmonth)+'.md'
-                lastyear = currentyear
-            else:
-                output_filename = str(currentyear)+'-'+str(lastmonth)+'.md'
-            if (all_tweets != ""):
-                print('writing out to ' + output_filename)
-                with open(output_filename, 'w', encoding='utf-8') as f:
-                    f.write(all_tweets)
-            all_tweets = '\n----\n'+md
-            lastmonth = currentmonth
-        else:
-            all_tweets += '\n----\n'+md
-    output_filename = str(currentyear)+'-'+str(currentmonth)+'.md'
-    print('writing out to ' + output_filename)
-    with open(output_filename, 'w', encoding='utf-8') as f:
-        f.write(all_tweets)
+
+    # Split tweets by month
+    tweets_by_month = defaultdict(str)
+    for timestamp, md in tweets_markdown:
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        filename = f'tweets_{dt.year}-{dt.month:02}.md'
+        tweets_by_month[filename] += md + '\n----\n'
+
+    # Write into files
+    for filename, md in tweets_by_month.items():
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(md)
+    print(f'Wrote to tweets_YYYY-MM.md, with images and video embedded from {output_media_folder_name}')
 
 
 if __name__ == "__main__":
