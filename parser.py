@@ -141,6 +141,9 @@ def main():
             f.write(md)
     print(f'Wrote to tweets_YYYY-MM.md, with images and video embedded from {output_media_folder_name}')
 
+    # Tell the user that it is possible to download better-quality media
+    print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
+    print("from Twitter then please run the script download_better_images.py")
 
 if __name__ == "__main__":
     main()

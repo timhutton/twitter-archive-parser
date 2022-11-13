@@ -17,12 +17,12 @@ Flaws of the Twitter archive:
 
 Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images, videos and links.
-- Replaces t.co URLs with their original versions
-- Copies used images to an output folder, to allow them to be moved to a new home
+- Replaces t.co URLs with their original versions.
+- Copies used images to an output folder, to allow them to be moved to a new home.
+- Afterwards, it asks if you want to try downloading the original size images using `download_better_images.py`.
 
 ## TODO:
 - Output as HTML files?
-- Download the full-size images? (Issue [#16](https://github.com/timhutton/twitter-archive-parser/issues/16))
 - Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
 
 ## Related tools:
