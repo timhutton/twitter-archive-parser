@@ -5,7 +5,32 @@
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, ei    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+        original_url = tweet['entities']['media'][0]['url']
+        markdown = ''
+        for media in tweet['extended_entities']['media']:
+            if 'url' in media and 'media_url' in media:
+                original_expanded_url = media['media_url']
+                original_filename = os.path.split(original_expanded_url)[1]
+                local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
+                new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
+                markdown += '' if not markdown and body == original_url else '\n\n'
+                if os.path.isfile(local_filename):
+                    # Found a matching image, use this one
+                    shutil.copy(local_filename, new_url)
+                    markdown += f'![]({new_url})'
+                else:
+                    # Is there any other file that includes the tweet_id in its filename?
+                    media_filenames = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
+                    if len(media_filenames) > 0:
+                        for media_filename in media_filenames:
+                            media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
+                            shutil.copy(media_filename, media_url)
+                            markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
+                    else:
+                        print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        markdown += f'![]({original_url})'
+        body = body.replace(original_url, markdown)ther version 3 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -66,7 +91,8 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 markdown += '' if not markdown and body == original_url else '\n\n'
                 if os.path.isfile(local_filename):
                     # Found a matching image, use this one
-                    shutil.copy(local_filename, new_url)
+                    if not os.path.isfile(new_url):
+                        shutil.copy(local_filename, new_url)
                     markdown += f'![]({new_url})'
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
@@ -74,7 +100,8 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                     if len(media_filenames) > 0:
                         for media_filename in media_filenames:
                             media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
-                            shutil.copy(media_filename, media_url)
+                            if not os.path.isfile(media_url):
+                                shutil.copy(media_filename, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
                     else:
                         print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
@@ -132,13 +159,17 @@ def main():
     for timestamp, md in tweets_markdown:
         dt = datetime.datetime.fromtimestamp(timestamp)
         filename = f'tweets_{dt.year}-{dt.month:02}.md'
-        tweets_by_month[filename] += md + '\n----\n'
+        tweets_by_month[filename] += md + '\n\n----\n\n'
 
     # Write into files
     for filename, md in tweets_by_month.items():
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(md)
     print(f'Wrote to tweets_YYYY-MM.md, with images and video embedded from {output_media_folder_name}')
+
+    # Tell the user that it is possible to download better-quality media
+    print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
+    print("from Twitter then please run the script download_better_images.py")
 
 
 if __name__ == "__main__":
