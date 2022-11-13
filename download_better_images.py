@@ -18,6 +18,7 @@
 """
 
 import glob
+import logging
 import os
 import shutil
 import time
@@ -39,13 +40,13 @@ def attempt_download_larger_media(url, filename, index, count):
             with open(filename,'wb') as f:
                 shutil.copyfileobj(res, f)
             percentage_increase = 100.0 * (size_after - size_before) / size_before
-            print(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
+            logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
             return True, size_after
         else:
-            print(f'{index}/{count}: Skipped. Downloaded version is same size or smaller than {filename}, {size_after/2**20:.1f}MB downloaded.')
+            logging.info(f'{index}/{count}: Skipped. Downloaded version is same size or smaller than {filename}, {size_after/2**20:.1f}MB downloaded.')
             return False, size_after
     except:
-        print(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
+        logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
         return False, 0
 
 def main():
@@ -65,6 +66,8 @@ def main():
         exit()
 
     # Download new versions
+    logging.basicConfig(level=logging.INFO, filename='download_log.txt', filemode='w', format='%(message)s')
+    logging.getLogger().addHandler(logging.StreamHandler())
     start_time = time.time()
     success_count = 0
     total_bytes_downloaded = 0
@@ -84,12 +87,11 @@ def main():
         success_count += 1 if success else 0
         total_bytes_downloaded += bytes_downloaded
         # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
-        time.sleep(2)
+        time.sleep(1)
     end_time = time.time()
-
-    print(f'\nReplaced {success_count} media files with larger versions.')
-    print(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
-    print(f'Time taken: {end_time-start_time:.0f}s')
+    logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
+    logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
+    logging.info(f'Time taken: {end_time-start_time:.0f}s')
 
 if __name__ == "__main__":
     main()
