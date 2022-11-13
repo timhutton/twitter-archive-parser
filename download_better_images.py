@@ -24,7 +24,6 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.request
 try:
     import requests
 except:
@@ -43,20 +42,19 @@ def attempt_download_larger_media(url, filename, index, count):
     print(f'{index}/{count}: Downloading...', end='\r')
     size_before = os.path.getsize(filename)
     try:
-        # (Would be nice to ask for the size without downloading, but it seems that twimg.com doesn't support HEAD requests.)
-        res = urllib.request.urlopen(url)
-        if not res.code == 200:
-            raise Exception('Download failed')
-        size_after = int(res.headers['content-length'])
-        if size_after > size_before:
-            with open(filename,'wb') as f:
-                shutil.copyfileobj(res, f)
-            percentage_increase = 100.0 * (size_after - size_before) / size_before
-            logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
-            return True, size_after
-        else:
-            logging.info(f'{index}/{count}: Skipped. Downloaded version is same size or smaller than {filename}, {size_after/2**20:.1f}MB downloaded.')
-            return False, size_after
+        with requests.get(url, stream=True) as res:
+            if not res.status_code == 200:
+                raise Exception('Download failed')
+            size_after = int(res.headers['content-length'])
+            if size_after > size_before:
+                with open(filename,'wb') as f:
+                    shutil.copyfileobj(res.raw, f)
+                percentage_increase = 100.0 * (size_after - size_before) / size_before
+                logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
+                return True, size_after
+            else:
+                logging.info(f'{index}/{count}: Skipped. Available version is same size or smaller than {filename}')
+                return False, 0
     except:
         logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
         return False, 0
@@ -105,7 +103,7 @@ def main():
         success_count += 1 if success else 0
         total_bytes_downloaded += bytes_downloaded
         # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
-        time.sleep(1)
+        time.sleep(0.75)
     end_time = time.time()
     logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
