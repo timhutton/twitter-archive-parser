@@ -62,6 +62,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 original_filename = os.path.split(original_expanded_url)[1]
                 local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
                 new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
+                line_break = '' if body.startswith(original_url) else '\n\n'
                 if os.path.isfile(local_filename):
                     # Found a matching image, use this one
                     shutil.copy(local_filename, new_url)
@@ -74,11 +75,11 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                         for media_filename in media_filenames:
                             media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
                             shutil.copy(media_filename, media_url)
-                            markdown += f'\n\n<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
+                            markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
                     else:
                         print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown = f'![]({original_url})'
-                body = body.replace(original_url, markdown)
+                body = body.replace(original_url, line_break + markdown)
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
     return timestamp, body
