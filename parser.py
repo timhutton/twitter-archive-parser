@@ -129,18 +129,21 @@ def main():
     # Sort tweets with oldest first
     tweets_markdown.sort(key=lambda tup: tup[0])
 
-    # Split tweets by month
-    tweets_by_month = defaultdict(str)
+    # Group tweets into blocks
+    grouped_tweets = defaultdict(list)
     for timestamp, md in tweets_markdown:
         dt = datetime.datetime.fromtimestamp(timestamp)
-        filename = f'tweets_{dt.year}-{dt.month:02}.md'
-        tweets_by_month[filename] += md + '\n\n----\n\n'
+        # Group tweets by month
+        # Write to a filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
+        filename = filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
+        grouped_tweets[filename].append(md)
 
     # Write into files
-    for filename, md in tweets_by_month.items():
+    for filename, md in grouped_tweets.items():
+        md_string =  '\n\n----\n\n'.join(md)
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(md)
-    print(f'Wrote to tweets_YYYY-MM.md, with images and video embedded from {output_media_folder_name}')
+            f.write(md_string)
+    print(f'Wrote tweets to *.md, with images and video embedded from {output_media_folder_name}')
 
     # Tell the user that it is possible to download better-quality media
     print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
