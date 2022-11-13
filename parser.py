@@ -131,7 +131,7 @@ def main():
     for timestamp, md in tweets_markdown:
         dt = datetime.datetime.fromtimestamp(timestamp)
         filename = f'tweets_{dt.year}-{dt.month:02}.md'
-        tweets_by_month[filename] += md + '\n----\n'
+        tweets_by_month[filename] += md + '\n\n----\n\n'
 
     # Write into files
     for filename, md in tweets_by_month.items():
