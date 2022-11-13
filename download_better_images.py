@@ -72,7 +72,8 @@ def main():
     print(f'This script will attempt to download {number_of_files} files from twimg.com. If the downloaded version is larger')
     print(f'than the version in {media_folder_name}/ then it will be overwritten. Please be aware that this script may download')
     print('a lot of data, which will cost you money if you are paying for bandwidth. Please be aware that')
-    print('the servers might block these requests if they are too frequent.')
+    print('the servers might block these requests if they are too frequent. This script may not work if your account is')
+    print('protected. You may want to set it to public before starting the download.')
     user_input = input('\nOK to continue? [y/n]')
     if not user_input.lower() in ('y', 'yes'):
         exit()
@@ -109,6 +110,7 @@ def main():
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
     print(f'Wrote log to {log_filename}')
+    print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
 if __name__ == "__main__":
     main()
