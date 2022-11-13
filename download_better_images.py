@@ -52,6 +52,7 @@ def attempt_download_larger_media(url, filename, index, count):
 def main():
 
     media_folder_name = 'media'
+    log_filename = 'download_log.txt'
 
     media_filenames = glob.glob(os.path.join(media_folder_name, '*.*'))
     number_of_files = len(media_filenames)
@@ -66,7 +67,7 @@ def main():
         exit()
 
     # Download new versions
-    logging.basicConfig(level=logging.INFO, filename='download_log.txt', filemode='w', format='%(message)s')
+    logging.basicConfig(level=logging.INFO, filename=log_filename, filemode='w', format='%(message)s')
     logging.getLogger().addHandler(logging.StreamHandler())
     start_time = time.time()
     success_count = 0
@@ -92,6 +93,7 @@ def main():
     logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
+    print(f'Wrote log to {log_filename}')
 
 if __name__ == "__main__":
     main()
