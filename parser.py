@@ -17,13 +17,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from collections import defaultdict
 import datetime
 import glob
 import json
 import os
 import shutil
-import requests
-import time
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -41,28 +40,6 @@ def extract_username(account_js_filename):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
-
-def download_image(url, file_name):
-    if not os.path.isfile(file_name):
-        res = requests.get(url, stream = True)
-        if res.status_code == 200:
-            with open(file_name,'wb') as f:
-                shutil.copyfileobj(res.raw, f)
-            print('Image sucessfully Downloaded: ',file_name)
-            True
-        else:
-            print('Image Couldn\'t be retrieved: ' + url)
-            False
-    else:
-        print("Skipping image. already downloaded: " + file_name)
-        True
-
-def local_file_checked_markdown(local_filename, new_filename, original_url, original_expanded_url):
-    markdown = f'![]({new_filename})'
-    if not os.path.isfile(local_filename):
-        print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
-        markdown = f'![]({original_url})'
-    return markdown
 
 def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
@@ -84,32 +61,25 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 original_expanded_url = media['media_url']
                 original_filename = os.path.split(original_expanded_url)[1]
                 local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
-                new_filename = output_media_folder_name + tweet_id_str + '-' + original_filename
-                # let's see if we can download the full-sized image
-                if media['media_url_https'] and media['media_url_https'].endswith('.jpg'):
-                    # some end with .mp4
-                    # media_url_https is https://pbs.twimg.com/media/AZO7q6fCAAEiCUD.jpg
-                    # but the full sized version can be acquired by
-                    # appending ?format=jpg&name=large
-                    full_url = media['media_url_https'] + '?format=jpg&name=large'
-                    full_filename = output_media_folder_name + tweet_id_str + '-full-' + original_filename
-                    markdown = f'![]({full_filename})'
-                    if download_image(full_url, full_filename):
-                        # just to minimize possibility of trigging some
-                        # auto-cutoff mechanism
-                        time.sleep(0.75)
-                    else:
-                        markdown = local_file_checked_markdown(local_filename,
-                                                                new_filename,
-                                                                original_url,
-                                                                original_expanded_url)
-                else:
-                    markdown = local_file_checked_markdown(local_filename,
-                                                            new_filename,
-                                                            original_url,
-                                                            original_expanded_url)
+                new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
                 if os.path.isfile(local_filename):
-                    shutil.copy(local_filename, new_filename)
+                    # Found a matching image, use this one
+                    if not os.path.isfile(new_url):
+                        shutil.copy(local_filename, new_url)
+                    markdown = f'![]({new_url})'
+                else:
+                    # Is there any other file that includes the tweet_id in its filename?
+                    media_filenames = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
+                    if len(media_filenames) > 0:
+                        markdown = ''
+                        for media_filename in media_filenames:
+                            media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
+                            if not os.path.isfile(media_url):
+                                shutil.copy(media_filename, media_url)
+                            markdown += f'\n\n<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
+                    else:
+                        print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        markdown = f'![]({original_url})'
                 body = body.replace(original_url, markdown)
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
@@ -118,7 +88,6 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
 def main():
 
     input_folder = '.'
-    output_filename = 'output.md'
     output_media_folder_name = 'media/'
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems
@@ -158,13 +127,20 @@ def main():
 
     # Sort tweets with oldest first
     tweets_markdown.sort(key=lambda tup: tup[0])
-    tweets_markdown = [md for t,md in tweets_markdown] # discard timestamps
 
-    # Save as one large markdown file
-    all_tweets = '\n----\n'.join(tweets_markdown)
-    with open(output_filename, 'w', encoding='utf-8') as f:
-        f.write(all_tweets)
-    print(f'Wrote to {output_filename}, which embeds images from {output_media_folder_name}')
+    # Split tweets by month
+    tweets_by_month = defaultdict(str)
+    for timestamp, md in tweets_markdown:
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        filename = f'tweets_{dt.year}-{dt.month:02}.md'
+        tweets_by_month[filename] += md + '\n----\n'
+
+    # Write into files
+    for filename, md in tweets_by_month.items():
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(md)
+    print(f'Wrote to tweets_YYYY-MM.md, with images and video embedded from {output_media_folder_name}')
+
 
 if __name__ == "__main__":
     main()
