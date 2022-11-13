@@ -54,11 +54,11 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
             if 'url' in url and 'expanded_url' in url:
                 body = body.replace(url['url'], url['expanded_url'])
     # replace image URLs with markdown image links to local files
-    if 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+        original_url = tweet['entities']['media'][0]['url']
         markdown = ''
         for media in tweet['extended_entities']['media']:
             if 'url' in media and 'media_url' in media:
-                original_url = media['url']
                 original_expanded_url = media['media_url']
                 original_filename = os.path.split(original_expanded_url)[1]
                 local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
