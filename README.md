@@ -5,6 +5,7 @@
 4. Run the script with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
 
 If you are having problems, the discussion here might be useful: https://mathstodon.xyz/@timhutton/109316834651128246
+<<<<<<< HEAD
 
 ## What does it do?
 The Twitter archive gives you a bunch of data and an HTML file (`Your archive.html`). Open that file to take a look! It lets you view your tweets in a nice interface. It has some flaws but maybe that's all you need. If so then stop here, you don't need our script.

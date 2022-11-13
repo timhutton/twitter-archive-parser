@@ -145,5 +145,6 @@ def main():
     print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
     print("from Twitter then please run the script download_better_images.py")
 
+
 if __name__ == "__main__":
     main()
