@@ -19,7 +19,7 @@ Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images, videos and links.
 - Replaces t.co URLs with their original versions.
 - Copies used images to an output folder, to allow them to be moved to a new home.
-- Afterwards, it asks if you want to try downloading the original size images using `download_better_images.py`.
+- Afterwards, it asks if you want to try downloading the original size images using [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py).
 
 ## TODO:
 - Output as HTML files?
