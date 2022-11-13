@@ -42,7 +42,7 @@ def attempt_download_larger_media(url, filename, index, count):
             print(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
             return True, size_after
         else:
-            print(f'{index}/{count}: Fail. Downloaded version is same size or smaller than {filename}, {size_after/2**20:.1f}MB downloaded.')
+            print(f'{index}/{count}: Skipped. Downloaded version is same size or smaller than {filename}, {size_after/2**20:.1f}MB downloaded.')
             return False, size_after
     except:
         print(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
