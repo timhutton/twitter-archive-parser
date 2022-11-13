@@ -63,7 +63,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 original_filename = os.path.split(original_expanded_url)[1]
                 local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
                 new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
-                markdown += '' if not markdown and body.startswith(original_url) else '\n\n'
+                markdown += '' if not markdown and body == original_url else '\n\n'
                 if os.path.isfile(local_filename):
                     # Found a matching image, use this one
                     shutil.copy(local_filename, new_url)
