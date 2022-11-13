@@ -21,8 +21,20 @@ import glob
 import logging
 import os
 import shutil
+import subprocess
+import sys
 import time
 import urllib.request
+try:
+    import requests
+except:
+    print('\nError: This script uses the "requests" module which is not installed.\n')
+    user_input = input('OK to install using pip? [y/n]')
+    if not user_input.lower() in ('y', 'yes'):
+        exit()
+    subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests'], check=True)
+    import requests
+
 
 def attempt_download_larger_media(url, filename, index, count):
     """Attempts to download from the specified URL. Overwrites file if larger.
@@ -58,7 +70,8 @@ def main():
     number_of_files = len(media_filenames)
 
     # Confirm with the user
-    print(f'\nThis script will attempt to download {number_of_files} files from twimg.com. If the downloaded version is larger')
+    print('\nDownload better images\n----------------------\n')
+    print(f'This script will attempt to download {number_of_files} files from twimg.com. If the downloaded version is larger')
     print(f'than the version in {media_folder_name}/ then it will be overwritten. Please be aware that this script may download')
     print('a lot of data, which will cost you money if you are paying for bandwidth. Please be aware that')
     print('the servers might block these requests if they are too frequent.')
@@ -66,9 +79,13 @@ def main():
     if not user_input.lower() in ('y', 'yes'):
         exit()
 
+    # Direct all output to stdout and errors to a log file
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
+    logfile_handler = logging.FileHandler(filename=log_filename, mode='w')
+    logfile_handler.setLevel(logging.ERROR)
+    logging.getLogger().addHandler(logfile_handler)
+
     # Download new versions
-    logging.basicConfig(level=logging.INFO, filename=log_filename, filemode='w', format='%(message)s')
-    logging.getLogger().addHandler(logging.StreamHandler())
     start_time = time.time()
     success_count = 0
     total_bytes_downloaded = 0
