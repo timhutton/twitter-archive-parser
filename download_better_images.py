@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import time
+import random 
 try:
     import requests
 except:
@@ -99,12 +100,16 @@ def main():
             url = f'https://video.twimg.com/tweet_video/{media_filename}'
         else:
             url = f'https://pbs.twimg.com/media/{media_filename}:orig'
+
         # Try downloading it
         success, bytes_downloaded = attempt_download_larger_media(url, filename, index+1, number_of_files)
         success_count += 1 if success else 0
+
         total_bytes_downloaded += bytes_downloaded
-        # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
-        time.sleep(0.75)
+        # Sleep at small random intervals, 
+        # in an attempt to minimize the possibility 
+        # of trigging some auto-cutoff mechanism
+        time.sleep(random.random() * 2 + .75)
     end_time = time.time()
     logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')

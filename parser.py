@@ -56,6 +56,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 body = body.replace(url['url'], url['expanded_url'])
     # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
     header = ''
+
     if 'in_reply_to_status_id' in tweet:
         # match and remove all occurences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body)[0]
