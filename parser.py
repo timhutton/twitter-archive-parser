@@ -22,6 +22,7 @@ import datetime
 import glob
 import json
 import os
+import re
 import shutil
 
 def read_json_from_js_file(filename):
@@ -53,6 +54,22 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
                 body = body.replace(url['url'], url['expanded_url'])
+    # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
+    header = ''
+    if 'in_reply_to_status_id' in tweet:
+        # match and remove all occurences of '@username ' at the start of the body
+        replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body)[0]
+        body = body.removeprefix(replying_to)
+        if not replying_to:
+            # no '@username ' in the body: we're replying to self
+            replying_to = f'@{username}'
+        names = replying_to.split()
+        # some old tweets lack 'in_reply_to_screen_name': use it if present, otherwise fall back to names[0]
+        in_reply_to_screen_name = tweet['in_reply_to_screen_name'] if 'in_reply_to_screen_name' in tweet else names[0]
+        # create a list of names of the form '@name1, @name2 and @name3' - or just '@name1' if there is only one name
+        name_list = ', '.join(names[:-1]) + (f' and {names[-1]}' if len(names) > 1 else names[0])
+        in_reply_to_status_id = tweet['in_reply_to_status_id']
+        header += f'Replying to [{name_list}](https://twitter.com/{in_reply_to_screen_name}/status/{in_reply_to_status_id})\n\n'
     # replace image URLs with markdown image links to local files
     if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
         original_url = tweet['entities']['media'][0]['url']
@@ -77,13 +94,15 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                             media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
                             if not os.path.isfile(media_url):
                                 shutil.copy(media_filename, media_url)
-                            markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n{media_url}'
+                            markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                     else:
                         print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
         body = body.replace(original_url, markdown)
+    # make the body a quote
+    body = '> ' + '\n> '.join(body.splitlines())
     # append the original Twitter URL as a link
-    body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
+    body = header + body + f'\n\n<img src="media/tweet.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
     return timestamp, body
 
 def main():
@@ -116,6 +135,9 @@ def main():
         exit()
     archive_media_folder = tweet_media_folder_names[0]
     os.makedirs(output_media_folder_name, exist_ok = True)
+
+    if not os.path.isfile('media/tweet.ico'):
+        shutil.copy('assets/images/favicon.ico', 'media/tweet.ico');
 
     # Parse the tweets
     username = extract_username(account_js_filename)
