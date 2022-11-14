@@ -18,28 +18,49 @@
 """
 
 from collections import defaultdict
+from typing import Any, Dict, List
 import datetime
 import glob
 import json
+import logging
 import os
+import re
 import shutil
 
-def read_json_from_js_file(filename):
-    """Reads the contents of a Twitter-produced .js file into a dictionary."""
-    with open(filename, 'r', encoding='utf8') as f:
-        data = f.readlines()
-        # convert js file to JSON: replace first line with just '[', squash lines into a single string
-        prefix = '['
-        if '{' in data[0]:
-            prefix += ' {'
-        data =  prefix + ''.join(data[1:])
-        # parse the resulting JSON and return as a dict
-        return json.loads(data)
+
+PRX_JS_ASSIGNMENT = re.compile(
+    r"\A (?P<variable>[\w\.]+) \s+ = \s+ (?P<json_content>\[ .+ \]) \s* \Z",
+    re.DOTALL | re.VERBOSE,
+)
+
+
+def read_json_from_js_file(filename: str) -> List[Dict[str, Any]]:
+    """
+    Convert the contents of a Twitter-produced .js file
+    to JSON and read that into a list of dicts
+
+    :param filename: the input file name
+    :returns: the data structure form the file, ie. a list of dicts
+    """
+    with open(filename, 'r', encoding='utf8') as input_file:
+        source_data = input_file.read()
+    #
+    matched_assignment = PRX_JS_ASSIGNMENT.match(source_data)
+    if matched_assignment:
+        fields = matched_assignment.groupdict()
+    else:
+        logging.warning("No assignment in file %r", filename)
+        return []
+    #
+    logging.debug("File %r: variable %r", filename, fields["variable"])
+    return json.loads(fields["json_content"])
+
 
 def extract_username(account_js_filename):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
+
 
 def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
@@ -85,6 +106,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     # append the original Twitter URL as a link
     body += f'\n\n(Originally on Twitter: [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str}))'
     return timestamp, body
+
 
 def main():
 
