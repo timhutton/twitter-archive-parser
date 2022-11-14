@@ -29,7 +29,7 @@ import shutil
 
 
 PRX_JS_ASSIGNMENT = re.compile(
-    r"\A (?P<variable>[\w\.]+) \s+ = \s+ (?P<json_content>\[ .+ \]) \s* \Z",
+    r"\A (?P<variable>[\w\.]+) \s+ = \s+ (?P<json_content>\[ .* \]) \s* \Z",
     re.DOTALL | re.VERBOSE,
 )
 
@@ -43,9 +43,8 @@ def read_json_from_js_file(filename: str) -> List[Dict[str, Any]]:
     :returns: the data structure form the file, ie. a list of dicts
     """
     with open(filename, 'r', encoding='utf8') as input_file:
-        source_data = input_file.read()
+        matched_assignment = PRX_JS_ASSIGNMENT.match(input_file.read())
     #
-    matched_assignment = PRX_JS_ASSIGNMENT.match(source_data)
     if matched_assignment:
         fields = matched_assignment.groupdict()
     else:
