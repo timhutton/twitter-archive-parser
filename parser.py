@@ -59,8 +59,9 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     if 'in_reply_to_status_id' in tweet:
         # match and remove all occurences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body)[0]
-        body = body.removeprefix(replying_to)
-        if not replying_to:
+        if replying_to:
+            body = body[len(replying_to):]
+        else:
             # no '@username ' in the body: we're replying to self
             replying_to = f'@{username}'
         names = replying_to.split()
