@@ -23,9 +23,7 @@ import glob
 import json
 import os
 import re
-import requests
 import shutil
-from urllib.parse import urlparse
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -51,15 +49,11 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
     body = tweet['full_text']
     tweet_id_str = tweet['id_str']
-    # replace t.co URLs with their original versions and expand known url shorteners
-    if 'entities' in tweet and 'urls' in tweet['entities'] and len(tweet['entities']['urls']) > 0:
+    # replace t.co URLs with their original versions
+    if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
-                expanded_url = expand_short_url(url['expanded_url'])
-                if expanded_url != url['expanded_url']:
-                    body = body.replace(url['url'], expanded_url)
-                else:
-                    body = body.replace(url['url'], url['expanded_url'])
+                body = body.replace(url['url'], url['expanded_url'])
     # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
     header = ''
     if 'in_reply_to_status_id' in tweet:
@@ -111,32 +105,6 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     # append the original Twitter URL as a link
     body = header + body + f'\n\n<img src="media/tweet.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
     return timestamp, body
-
-def is_short_url(url):
-    hostname = urlparse(url).hostname
-    shorteners = ['t.co', '7ax.de', 'bit.ly', 'buff.ly', 'cnn.it', 'ct.de', 'flic.kr', 'go.shr.lc', 'ift.tt', 'instagr.am', 'is.gd', 'j.mp', 'ku-rz.de', 'p.dw.com', 'pl0p.de', 'spon.de', 'sz.de', 'tiny.cc', 'tinyurl.com', 'trib.al', 'wp.me', 'www.sz.de', 'yfrog.com']
-    if any(shortener in hostname for shortener in shorteners):
-        return True
-    return False
-
-def expand_short_url(url):
-    if is_short_url(url):
-        try:
-            request = requests.head(url, timeout=2)
-        except:
-            return url
-        if request.ok == False:
-            return url
-        try:
-            url_from_location_header = request.headers['location']
-        except KeyError:
-            return url
-        if not url_from_location_header.startswith('http'):
-            return url
-        elif ':443' in url_from_location_header or is_short_url(url_from_location_header):
-            url_from_location_header = expand_short_url(url_from_location_header.replace('http:', 'https:'))
-        url = url_from_location_header
-    return url
 
 def main():
 
