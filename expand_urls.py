@@ -1,6 +1,7 @@
 import configparser
 import glob
 import os
+import re
 import requests
 import time
 from urllib.parse import urlparse
@@ -64,6 +65,15 @@ class URLExpander:
                         expanded_url = self.expand_short_url(original_url)
                         if expanded_url != original_url:
                             self.save_mapping(original_url, expanded_url)
+        else:
+            # really old tweets may contain URLs as plain text in the body
+            possible_urls = re.finditer(r"https?://[a-z0-9\.]+/[a-z0-9?]{10}", tweet['full_text'], re.MULTILINE | re.IGNORECASE)
+            for (_, match) in enumerate(possible_urls):
+                matched_url = match.group(0)
+                if not self.mapping_exists(matched_url):
+                    expanded_url = self.expand_short_url(matched_url)
+                    if (expanded_url != matched_url):
+                        self.save_mapping(matched_url, expanded_url)
 
     def is_short_url(self, url):
         hostname = urlparse(url).hostname
