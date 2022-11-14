@@ -106,6 +106,13 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     body = header + body + f'\n\n<img src="media/tweet.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
     return timestamp, body
 
+def load_file_names(folder_name_templates):
+    data_folder = os.path.join('.', 'data')
+    folder_buffer = []
+    for folder_name_template in folder_name_templates:
+        folder_buffer += glob.glob(os.path.join(data_folder,folder_name_template)) 
+    return folder_buffer
+
 def main():
 
     input_folder = '.'
@@ -114,20 +121,23 @@ def main():
     # Identify the file and folder names - they change slightly depending on the archive size it seems
     data_folder = os.path.join(input_folder, 'data')
     account_js_filename = os.path.join(data_folder, 'account.js')
+
     if not os.path.isfile(account_js_filename):
+
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
+
+    #loading file templates into input_filenames buffer
     tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
-    input_filenames = []
-    for tweet_js_filename_template in tweet_js_filename_templates:
-        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
+    input_filenames = load_file_names(tweet_js_filename_templates)
+
     if len(input_filenames)==0:
         print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
         exit()
+    #loading tweet medie into tweet_media_folder_names
     tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
-    tweet_media_folder_names = []
-    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
-        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
+    tweet_media_folder_names = load_file_names(tweet_media_folder_name_templates) 
+
     if len(tweet_media_folder_names)==0:
         print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
         exit()
