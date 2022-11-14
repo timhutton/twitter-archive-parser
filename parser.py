@@ -102,7 +102,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     # make the body a quote
     body = '> ' + '\n> '.join(body.splitlines())
     # append the original Twitter URL as a link
-    body = header + body + f'\n\n<img src="assets/images/favicon.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
+    body = header + body + f'\n\n<img src="media/tweet.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
     return timestamp, body
 
 def main():
@@ -135,6 +135,9 @@ def main():
         exit()
     archive_media_folder = tweet_media_folder_names[0]
     os.makedirs(output_media_folder_name, exist_ok = True)
+
+    if not os.path.isfile('media/tweet.ico'):
+        shutil.copy('assets/images/favicon.ico', 'media/tweet.ico');
 
     # Parse the tweets
     username = extract_username(account_js_filename)
