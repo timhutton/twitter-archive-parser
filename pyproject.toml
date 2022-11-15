@@ -1,0 +1,22 @@
+[project]
+name = "twitter-archive-parser"
+version = "0.1.0"
+license = { text = "GPL version 3 or later"}
+description = "Python code to parse a Twitter archive and output in various ways"
+authors = [{name="Tim Hutton"}]
+readme = "README.md"
+dependencies = [
+    "requests",
+]
+
+[build-system]
+requires = ["setuptools >= 40.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["parser", "download_better_images"]
+namespaces = false
+
+[project.scripts]
+twitter-archive-parser = "parser:main"
+twitter-archive-download-better-images = "download_better_images:main"
