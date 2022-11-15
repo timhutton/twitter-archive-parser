@@ -42,7 +42,7 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
-def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name):
+def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name, tweet_icon_path):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
     tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
@@ -103,13 +103,14 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
     # make the body a quote
     body = '> ' + '\n> '.join(body.splitlines())
     # append the original Twitter URL as a link
-    body = header + body + f'\n\n<img src="media/tweet.ico" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
+    body = header + body + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
     return timestamp, body
 
 def main():
 
     input_folder = '.'
     output_media_folder_name = 'media/'
+    tweet_icon_path = f'{output_media_folder_name}tweet.ico'
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems
     data_folder = os.path.join(input_folder, 'data')
@@ -137,8 +138,8 @@ def main():
     archive_media_folder = tweet_media_folder_names[0]
     os.makedirs(output_media_folder_name, exist_ok = True)
 
-    if not os.path.isfile('media/tweet.ico'):
-        shutil.copy('assets/images/favicon.ico', 'media/tweet.ico');
+    if not os.path.isfile(tweet_icon_path):
+        shutil.copy('assets/images/favicon.ico', tweet_icon_path);
 
     # Parse the tweets
     username = extract_username(account_js_filename)
@@ -146,7 +147,7 @@ def main():
     for tweets_js_filename in input_filenames:
         print(f'Parsing {tweets_js_filename}...')
         json = read_json_from_js_file(tweets_js_filename)
-        tweets_markdown += [tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name) for tweet in json]
+        tweets_markdown += [tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name, tweet_icon_path) for tweet in json]
     print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
 
     # Sort tweets with oldest first
