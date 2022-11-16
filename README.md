@@ -3,7 +3,10 @@
 2. Unzip to a folder.
 3. Right-click this link [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) and select "Save Link as", and save into the folder where you extracted the archive.
 4. Run parser.py with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
-5. If you want to download full-sized images, run download_better_images.py with Python3. e.g. `python download_better_images.py` from a command prompt opened in that folder.
+
+If you want to download full-sized images:
+1. Right-click this link [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py) and select "Save Link as", and save into the folder where you extracted the archive.
+2. Run download_better_images.py with Python3. e.g. `python download_better_images.py` from a command prompt opened in that folder.
 
 If you are having problems, the discussion here might be useful: https://mathstodon.xyz/@timhutton/109316834651128246
 
