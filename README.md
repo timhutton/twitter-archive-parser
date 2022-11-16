@@ -21,8 +21,12 @@ Our script does the following:
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Afterwards, it asks if you want to try downloading the original size images using [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py).
 
+You can then convert the md files to a single HTML page with:
+
+    python3 convert_to_html.py
+
+
 ## TODO:
-- Output as HTML files?
 - Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
 
 ## Related tools:
