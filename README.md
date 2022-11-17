@@ -20,11 +20,10 @@ Flaws of the Twitter archive:
 - The links are all obfuscated in a short form using t.co, which hides their origin and redirects traffic to Twitter, giving them analytics. Also they will stop working if t.co goes down.
 
 Our script does the following:
-- Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) with embedded images, videos and links.
+- Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) and also HTML, with embedded images, videos and links.
 - Replaces t.co URLs with their original versions.
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Afterwards, it asks if you want to try downloading the original size images using [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py).
-- It then asks if you want to convert to HTML using [convert_to_html.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/convert_to_html.py).
 
 
 ## TODO:

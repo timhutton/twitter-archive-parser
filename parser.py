@@ -42,26 +42,30 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
-def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name,
+def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
                            tweet_icon_path, media_sources):
-    """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
+    """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
     timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
-    body = tweet['full_text']
+    body_markdown = tweet['full_text']
+    body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
     # replace t.co URLs with their original versions
     if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
-                body = body.replace(url['url'], url['expanded_url'])
+                body_markdown = body_markdown.replace(url['url'], url['expanded_url'])
+                body_html = body_html.replace(url['url'], url['expanded_url'])
     # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
-    header = ''
+    header_markdown = ''
+    header_html = ''
     if 'in_reply_to_status_id' in tweet:
         # match and remove all occurences of '@username ' at the start of the body
-        replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body)[0]
+        replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
-            body = body[len(replying_to):]
+            body_markdown = body_markdown[len(replying_to):]
+            body_html = body_html[len(replying_to):]
         else:
             # no '@username ' in the body: we're replying to self
             replying_to = f'@{username}'
@@ -71,11 +75,14 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
         # create a list of names of the form '@name1, @name2 and @name3' - or just '@name1' if there is only one name
         name_list = ', '.join(names[:-1]) + (f' and {names[-1]}' if len(names) > 1 else names[0])
         in_reply_to_status_id = tweet['in_reply_to_status_id']
-        header += f'Replying to [{name_list}](https://twitter.com/{in_reply_to_screen_name}/status/{in_reply_to_status_id})\n\n'
-    # replace image URLs with markdown image links to local files
+        replying_to_url = f'https://twitter.com/{in_reply_to_screen_name}/status/{in_reply_to_status_id}'
+        header_markdown += f'Replying to [{name_list}]({replying_to_url})\n\n'
+        header_html += f'Replying to <a href="{replying_to_url}">{name_list}</a><br>'
+    # replace image URLs with image links to local files
     if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
         original_url = tweet['entities']['media'][0]['url']
         markdown = ''
+        html = ''
         for media in tweet['extended_entities']['media']:
             if 'url' in media and 'media_url' in media:
                 original_expanded_url = media['media_url']
@@ -83,12 +90,14 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                 archive_media_filename = tweet_id_str + '-' + original_filename
                 archive_media_path = os.path.join(archive_media_folder, archive_media_filename)
                 new_url = output_media_folder_name + archive_media_filename
-                markdown += '' if not markdown and body == original_url else '\n\n'
+                markdown += '' if not markdown and body_markdown == original_url else '\n\n'
+                html += '' if not html and body_html == original_url else '<br>'
                 if os.path.isfile(archive_media_path):
                     # Found a matching image, use this one
                     if not os.path.isfile(new_url):
                         shutil.copy(archive_media_path, new_url)
                     markdown += f'![]({new_url})'
+                    html += f'<img src="{new_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
                     media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
@@ -102,6 +111,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                             if not os.path.isfile(media_url):
                                 shutil.copy(archive_media_path, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
+                            html += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                             # Save the online location of the best-quality version of this file, for later upgrading if wanted
                             if 'video_info' in media and 'variants' in media['video_info']:
                                 best_quality_url = ''
@@ -120,12 +130,17 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                     else:
                         print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
-        body = body.replace(original_url, markdown)
+                        html += f'<a href="{original_url}">{original_url}</a>'
+        body_markdown = body_markdown.replace(original_url, markdown)
+        body_html = body_html.replace(original_url, html)
     # make the body a quote
-    body = '> ' + '\n> '.join(body.splitlines())
+    body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
+    body_html = '<p><blockquote>' + '<br>\n'.join(body_html.splitlines()) + '</blockquote>'
     # append the original Twitter URL as a link
-    body = header + body + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}](https://twitter.com/{username}/status/{tweet_id_str})'
-    return timestamp, body
+    original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
+    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
+    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    return timestamp, body_markdown, body_html
 
 def main():
 
@@ -133,6 +148,25 @@ def main():
     output_media_folder_name = 'media/'
     tweet_icon_path = f'{output_media_folder_name}tweet.ico'
     media_sources_filename = 'media_sources.txt'
+    output_html_filename = 'TweetArchive.html'
+
+    HTML = """\
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet"
+          href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <title>Your Twitter archive!</title>
+</head>
+<body>
+    <h1>Your twitter archive</h1>
+    <main class="container">
+    {}
+    </main>
+</body>
+</html>"""
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems
     data_folder = os.path.join(input_folder, 'data')
@@ -166,42 +200,46 @@ def main():
     username = extract_username(account_js_filename)
 
     # Parse the tweets
-    tweets_markdown = []
+    tweets = []
     with open(os.path.join(output_media_folder_name, media_sources_filename), 'w') as media_sources:
         for tweets_js_filename in input_filenames:
             print(f'Parsing {tweets_js_filename}...')
             json = read_json_from_js_file(tweets_js_filename)
             for tweet in json:
-                tweets_markdown.append(tweet_json_to_markdown(tweet, username, archive_media_folder,
-                                                              output_media_folder_name, tweet_icon_path,
-                                                              media_sources))
-    print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
+                tweets.append(convert_tweet(tweet, username, archive_media_folder,
+                                            output_media_folder_name, tweet_icon_path,
+                                            media_sources))
+    print(f'Parsed {len(tweets)} tweets and replies by {username}.')
 
     # Sort tweets with oldest first
-    tweets_markdown.sort(key=lambda tup: tup[0])
+    tweets.sort(key=lambda tup: tup[0])
 
-    # Group tweets into blocks
-    grouped_tweets = defaultdict(list)
-    for timestamp, md in tweets_markdown:
+    # Process tweets
+    grouped_tweets_markdown = defaultdict(list)
+    all_html_string = ''
+    for timestamp, md, html in tweets:
+        all_html_string += html + '<hr>\n'
+        # Group tweets by month for markdown
+        # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
-        # Group tweets by month
-        # Write to a filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
-        filename = filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
-        grouped_tweets[filename].append(md)
+        markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
+        grouped_tweets_markdown[markdown_filename].append(md)
 
-    # Write into files
-    for filename, md in grouped_tweets.items():
+    # Write into *.md files
+    for filename, md in grouped_tweets_markdown.items():
         md_string =  '\n\n----\n\n'.join(md)
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(md_string)
-    print(f'Wrote tweets to *.md, with images and video embedded from {output_media_folder_name}')
+
+    # Write into html file
+    with open(output_html_filename, 'w', encoding='utf-8') as f:
+        f.write(HTML.format(all_html_string))
+
+    print(f'Wrote tweets to *.md and *.html, with images and video embedded from {output_media_folder_name}')
 
     # Tell the user that it is possible to download better-quality media
     print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
     print("from Twitter then please run the script download_better_images.py")
-
-    # Also tell the user that it is possible to convert md files to HTML
-    print("\nIf you are interested in converting the MD files into HTML, please run the script convert_to_html.py")
 
 
 if __name__ == "__main__":
