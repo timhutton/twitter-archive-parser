@@ -55,8 +55,10 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
-                body_markdown = body_markdown.replace(url['url'], url['expanded_url'])
-                body_html = body_html.replace(url['url'], url['expanded_url'])
+                expanded_url = url['expanded_url']
+                body_markdown = body_markdown.replace(url['url'], expanded_url)
+                expanded_url_html = f'<a href="{expanded_url}">{expanded_url}</a>'
+                body_html = body_html.replace(url['url'], expanded_url_html)
     # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
     header_markdown = ''
     header_html = ''
