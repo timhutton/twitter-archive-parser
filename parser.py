@@ -235,7 +235,7 @@ def main():
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(HTML.format(all_html_string))
 
-    print(f'Wrote tweets to *.md and *.html, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
     # Tell the user that it is possible to download better-quality media
     print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
