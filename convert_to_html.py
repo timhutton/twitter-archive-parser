@@ -56,6 +56,9 @@ HTML = """\
 
 
 def convert_to_html():
+
+    output_filename = 'TwitterArchive.html'
+
     md_filenames = sorted(glob.glob('*.md'))
 
     output = []
@@ -67,8 +70,9 @@ def convert_to_html():
     content = ''.join(output)
     result = HTML.format(content)
 
-    with open('TwitterArchive.html', 'w', encoding='utf8') as f:
+    with open(output_filename, 'w', encoding='utf8') as f:
         f.write(result)
+    print(f'Wrote {output_filename}')
 
 
 if __name__ == "__main__":
