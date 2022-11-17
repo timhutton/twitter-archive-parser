@@ -218,7 +218,7 @@ def main():
 
     # Group tweets by month (for markdown)
     grouped_tweets_markdown = defaultdict(list)
-    for timestamp, md, html in tweets:
+    for timestamp, md, _ in tweets:
         # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
         markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
