@@ -54,8 +54,9 @@ def attempt_download_larger_media(url, filename, index, count, sleep_time):
             if size_after > size_before:
                 # Proceed with the full download
                 print(f'{index}/{count}: Downloading {url}...            ', end='\r')
-                with open(filename,'wb') as f:
+                with open(filename+'.tmp','wb') as f:
                     shutil.copyfileobj(res.raw, f)
+                os.rename(filename+'.tmp', filename)
                 percentage_increase = 100.0 * (size_after - size_before) / size_before
                 logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version from {url} that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
                 return True, size_after
