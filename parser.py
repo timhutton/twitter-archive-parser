@@ -214,12 +214,9 @@ def main():
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
 
-    # Process tweets
+    # Group tweets by month (for markdown)
     grouped_tweets_markdown = defaultdict(list)
-    all_html_string = ''
     for timestamp, md, html in tweets:
-        all_html_string += html + '<hr>\n'
-        # Group tweets by month for markdown
         # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
         markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
@@ -232,6 +229,7 @@ def main():
             f.write(md_string)
 
     # Write into html file
+    all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(HTML.format(all_html_string))
 
