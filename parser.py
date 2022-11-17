@@ -42,7 +42,8 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
-def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name, tweet_icon_path):
+def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name,
+                           tweet_icon_path, media_sources):
     """Converts a JSON-format tweet into markdown. Returns tuple of timestamp and markdown."""
     tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
@@ -79,25 +80,45 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
             if 'url' in media and 'media_url' in media:
                 original_expanded_url = media['media_url']
                 original_filename = os.path.split(original_expanded_url)[1]
-                local_filename = os.path.join(archive_media_folder, tweet_id_str + '-' + original_filename)
-                new_url = output_media_folder_name + tweet_id_str + '-' + original_filename
+                archive_media_filename = tweet_id_str + '-' + original_filename
+                archive_media_path = os.path.join(archive_media_folder, archive_media_filename)
+                new_url = output_media_folder_name + archive_media_filename
                 markdown += '' if not markdown and body == original_url else '\n\n'
-                if os.path.isfile(local_filename):
+                if os.path.isfile(archive_media_path):
                     # Found a matching image, use this one
                     if not os.path.isfile(new_url):
-                        shutil.copy(local_filename, new_url)
+                        shutil.copy(archive_media_path, new_url)
                     markdown += f'![]({new_url})'
+                    # Save the online location of the best-quality version of this file, for later upgrading if wanted
+                    best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
+                    media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
-                    media_filenames = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
-                    if len(media_filenames) > 0:
-                        for media_filename in media_filenames:
-                            media_url = f'{output_media_folder_name}{os.path.split(media_filename)[-1]}'
+                    archive_media_paths = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
+                    if len(archive_media_paths) > 0:
+                        for archive_media_path in archive_media_paths:
+                            archive_media_filename = os.path.split(archive_media_path)[-1]
+                            media_url = f'{output_media_folder_name}{archive_media_filename}'
                             if not os.path.isfile(media_url):
-                                shutil.copy(media_filename, media_url)
+                                shutil.copy(archive_media_path, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
+                            # Save the online location of the best-quality version of this file, for later upgrading if wanted
+                            if 'video_info' in media and 'variants' in media['video_info']:
+                                best_quality_url = ''
+                                best_bitrate = -1 # some valid videos are marked with bitrate=0 in the JSON
+                                for variant in media['video_info']['variants']:
+                                    if 'bitrate' in variant:
+                                        bitrate = int(variant['bitrate'])
+                                        if bitrate > best_bitrate:
+                                            best_quality_url = variant['url']
+                                            best_bitrate = bitrate
+                                if best_bitrate == -1:
+                                    print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
+                                    print(f"JSON: {tweet}")
+                                else:
+                                    media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
                     else:
-                        print(f'Warning: missing local file: {local_filename}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
         body = body.replace(original_url, markdown)
     # make the body a quote
@@ -111,6 +132,7 @@ def main():
     input_folder = '.'
     output_media_folder_name = 'media/'
     tweet_icon_path = f'{output_media_folder_name}tweet.ico'
+    media_sources_filename = 'media_sources.txt'
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems
     data_folder = os.path.join(input_folder, 'data')
@@ -141,13 +163,18 @@ def main():
     if not os.path.isfile(tweet_icon_path):
         shutil.copy('assets/images/favicon.ico', tweet_icon_path);
 
-    # Parse the tweets
     username = extract_username(account_js_filename)
+
+    # Parse the tweets
     tweets_markdown = []
-    for tweets_js_filename in input_filenames:
-        print(f'Parsing {tweets_js_filename}...')
-        json = read_json_from_js_file(tweets_js_filename)
-        tweets_markdown += [tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_folder_name, tweet_icon_path) for tweet in json]
+    with open(os.path.join(output_media_folder_name, media_sources_filename), 'w') as media_sources:
+        for tweets_js_filename in input_filenames:
+            print(f'Parsing {tweets_js_filename}...')
+            json = read_json_from_js_file(tweets_js_filename)
+            for tweet in json:
+                tweets_markdown.append(tweet_json_to_markdown(tweet, username, archive_media_folder,
+                                                              output_media_folder_name, tweet_icon_path,
+                                                              media_sources))
     print(f'Parsed {len(tweets_markdown)} tweets and replies by {username}.')
 
     # Sort tweets with oldest first
