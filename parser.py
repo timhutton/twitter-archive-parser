@@ -173,6 +173,9 @@ def main():
     print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
     print("from Twitter then please run the script download_better_images.py")
 
+    # Also tell the user that it is possible to convert md files to HTML
+    print("\nIf you are interested in converting the MD files into HTML, please run the script convert_to_html.py")
+
 
 if __name__ == "__main__":
     main()

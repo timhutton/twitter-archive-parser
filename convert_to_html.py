@@ -60,14 +60,14 @@ def convert_to_html():
 
     output = []
     for filename in md_filenames:
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf8') as f:
             text = f.read()
             output.append(markdown.markdown(text))
 
     content = ''.join(output)
     result = HTML.format(content)
 
-    with open('TwitterArchive.html', 'w') as f:
+    with open('TwitterArchive.html', 'w', encoding='utf8') as f:
         f.write(result)
 
 
