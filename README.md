@@ -24,9 +24,10 @@ Our script does the following:
 - Replaces t.co URLs with their original versions.
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Afterwards, it asks if you want to try downloading the original size images using [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py).
+- It then asks if you want to convert to HTML using [convert_to_html.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/convert_to_html.py).
+
 
 ## TODO:
-- Output as HTML files?
 - Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
 
 ## Related tools:
