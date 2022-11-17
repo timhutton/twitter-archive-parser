@@ -20,10 +20,13 @@
 from collections import defaultdict
 import datetime
 import glob
+import importlib
 import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -143,6 +146,20 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     body_markdown = header_markdown + body_markdown + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
     body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
     return timestamp, body_markdown, body_html
+
+
+def import_module(module):
+    """Imports a module specified by a string. Example: requests = import_module('requests')"""
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        print(f'\nError: This script uses the "{module}" module which is not installed.\n')
+        user_input = input('OK to install using pip? [y/n]')
+        if not user_input.lower() in ('y', 'yes'):
+            exit()
+        subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
+        return importlib.import_module(module)
+
 
 def main():
 
