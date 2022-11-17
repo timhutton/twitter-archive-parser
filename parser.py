@@ -103,7 +103,6 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                                 shutil.copy(archive_media_path, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                             # Save the online location of the best-quality version of this file, for later upgrading if wanted
-                            #best_quality_url = f'https://video.twimg.com/tweet_video/{original_filename}'
                             if 'video_info' in media and 'variants' in media['video_info']:
                                 best_quality_url = ''
                                 best_bitrate = -1 # some valid videos are marked with bitrate=0 in the JSON
@@ -115,7 +114,7 @@ def tweet_json_to_markdown(tweet, username, archive_media_folder, output_media_f
                                             best_bitrate = bitrate
                                 if best_bitrate == -1:
                                     print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
-                                    print(f"JSON: {media['video_info']}")
+                                    print(f"JSON: {tweet}")
                                 else:
                                     media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
                     else:
