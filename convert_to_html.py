@@ -69,3 +69,7 @@ def convert_to_html():
 
     with open('TwitterArchive.html', 'w') as f:
         f.write(result)
+
+
+if __name__ == "__main__":
+    convert_to_html()
