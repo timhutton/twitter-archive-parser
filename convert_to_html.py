@@ -67,7 +67,7 @@ def convert_to_html():
             text = f.read()
             output.append(markdown.markdown(text))
 
-    content = ''.join(output)
+    content = '<hr />\n'.join(output)
     result = HTML.format(content)
 
     with open(output_filename, 'w', encoding='utf8') as f:
