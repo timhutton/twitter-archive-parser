@@ -39,7 +39,12 @@ def attempt_download_larger_media(url, filename, index, count):
     """Attempts to download from the specified URL. Overwrites file if larger.
        Returns success flag and number of bytes downloaded.
     """
-    print(f'{index}/{count}: Downloading...', end='\r')
+    # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
+    if index > 1:
+        print(f'{index}/{count}: Sleeping...', end='\r')
+        time.sleep(1.5)
+    # Request the URL (in stream mode so that we can conditionally abort depending on the headers)
+    print(f'{index}/{count}: Requesting headers for {url}...', end='\r')
     size_before = os.path.getsize(filename)
     try:
         with requests.get(url, stream=True) as res:
@@ -47,13 +52,15 @@ def attempt_download_larger_media(url, filename, index, count):
                 raise Exception('Download failed')
             size_after = int(res.headers['content-length'])
             if size_after > size_before:
+                # Proceed with the full download
+                print(f'{index}/{count}: Downloading {url}...            ', end='\r')
                 with open(filename,'wb') as f:
                     shutil.copyfileobj(res.raw, f)
                 percentage_increase = 100.0 * (size_after - size_before) / size_before
-                logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
+                logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version from {url} that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
                 return True, size_after
             else:
-                logging.info(f'{index}/{count}: Skipped. Available version is same size or smaller than {filename}')
+                logging.info(f'{index}/{count}: Skipped. Available version at {url} is same size or smaller than {filename}')
                 return False, 0
     except:
         logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
@@ -62,10 +69,18 @@ def attempt_download_larger_media(url, filename, index, count):
 def main():
 
     media_folder_name = 'media'
+    media_sources_path = os.path.join(media_folder_name, 'media_sources.txt')
     log_filename = 'download_log.txt'
 
-    media_filenames = glob.glob(os.path.join(media_folder_name, '*.*'))
-    number_of_files = len(media_filenames)
+    # Read the media sources file produced by parser.py
+    try:
+        with open(media_sources_path, 'r', encoding='utf8') as sources:
+            lines = sources.readlines()
+    except:
+        print(f'ERROR: failed to open {media_sources_path}. Did you run parser.py first?')
+        exit()
+    sources = [[entry.strip() for entry in line.split(' ')] for line in lines]
+    number_of_files = len(sources)
 
     # Confirm with the user
     print('\nDownload better images\n----------------------\n')
@@ -81,31 +96,21 @@ def main():
     # Direct all output to stdout and errors to a log file
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
     logfile_handler = logging.FileHandler(filename=log_filename, mode='w')
-    logfile_handler.setLevel(logging.ERROR)
+    logfile_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(logfile_handler)
 
     # Download new versions
     start_time = time.time()
     success_count = 0
     total_bytes_downloaded = 0
-    for index, filename in enumerate(media_filenames):
-        # Construct the URL corresponding to this file:
-        # - media in the Twitter archive are: <tweet_id>-<media_id>.<ext>
-        # - images online are: https://pbs.twimg.com/media/<media_id>.<ext>:orig
-        # - videos online are: https://video.twimg.com/tweet_video/<media_id>.<ext>
-        media_filename = filename.split('-', 1)[-1]
-        ext = os.path.splitext(media_filename)[1]
-        if ext in ['.mp4', '.mpg']:
-            url = f'https://video.twimg.com/tweet_video/{media_filename}'
-        else:
-            url = f'https://pbs.twimg.com/media/{media_filename}:orig'
+    for index, (local_media_filename, media_url) in enumerate(sources):
         # Try downloading it
-        success, bytes_downloaded = attempt_download_larger_media(url, filename, index+1, number_of_files)
+        local_media_path = os.path.join(media_folder_name, local_media_filename)
+        success, bytes_downloaded = attempt_download_larger_media(media_url, local_media_path, index+1, number_of_files)
         success_count += 1 if success else 0
         total_bytes_downloaded += bytes_downloaded
-        # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
-        time.sleep(0.75)
     end_time = time.time()
+
     logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
