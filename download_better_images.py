@@ -35,14 +35,14 @@ except:
     import requests
 
 
-def attempt_download_larger_media(url, filename, index, count):
+def attempt_download_larger_media(url, filename, index, count, sleep_time):
     """Attempts to download from the specified URL. Overwrites file if larger.
        Returns success flag and number of bytes downloaded.
     """
     # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
     if index > 1:
         print(f'{index}/{count}: Sleeping...', end='\r')
-        time.sleep(1.5)
+        time.sleep(sleep_time)
     # Request the URL (in stream mode so that we can conditionally abort depending on the headers)
     print(f'{index}/{count}: Requesting headers for {url}...', end='\r')
     size_before = os.path.getsize(filename)
@@ -61,7 +61,7 @@ def attempt_download_larger_media(url, filename, index, count):
                 return True, size_after
             else:
                 logging.info(f'{index}/{count}: Skipped. Available version at {url} is same size or smaller than {filename}')
-                return False, 0
+                return True, 0
     except:
         logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
         return False, 0
@@ -80,11 +80,10 @@ def main():
         print(f'ERROR: failed to open {media_sources_path}. Did you run parser.py first?')
         exit()
     sources = [[entry.strip() for entry in line.split(' ')] for line in lines]
-    number_of_files = len(sources)
 
     # Confirm with the user
     print('\nDownload better images\n----------------------\n')
-    print(f'This script will attempt to download {number_of_files} files from twimg.com. If the downloaded version is larger')
+    print(f'This script will attempt to download {len(sources)} files from twimg.com. If the downloaded version is larger')
     print(f'than the version in {media_folder_name}/ then it will be overwritten. Please be aware that this script may download')
     print('a lot of data, which will cost you money if you are paying for bandwidth. Please be aware that')
     print('the servers might block these requests if they are too frequent. This script may not work if your account is')
@@ -101,17 +100,32 @@ def main():
 
     # Download new versions
     start_time = time.time()
-    success_count = 0
     total_bytes_downloaded = 0
-    for index, (local_media_filename, media_url) in enumerate(sources):
-        # Try downloading it
-        local_media_path = os.path.join(media_folder_name, local_media_filename)
-        success, bytes_downloaded = attempt_download_larger_media(media_url, local_media_path, index+1, number_of_files)
-        success_count += 1 if success else 0
-        total_bytes_downloaded += bytes_downloaded
+    sleep_time = 0.25
+    remaining_tries = 5
+    while remaining_tries > 0:
+        number_of_files = len(sources)
+        success_count = 0
+        retries = []
+        for index, (local_media_filename, media_url) in enumerate(sources):
+            # Try downloading it
+            local_media_path = os.path.join(media_folder_name, local_media_filename)
+            success, bytes_downloaded = attempt_download_larger_media(media_url, local_media_path, index+1, number_of_files, sleep_time)
+            if success:
+                success_count += 1
+            else:
+                retries.append((local_media_filename, media_url))
+            total_bytes_downloaded += bytes_downloaded
+        sources = retries
+        remaining_tries -= 1
+        sleep_time += 2
+        logging.info(f'\n{success_count} of {number_of_files} tested media files are known to be the best-quality available.\n')
+        if len(retries) == 0:
+            break
+        if remaining_tries > 0:
+            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. {remaining_tries} tries remaining.\n')
     end_time = time.time()
 
-    logging.info(f'\nReplaced {success_count} of {number_of_files} media files with larger versions.')
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
     print(f'Wrote log to {log_filename}')
