@@ -245,7 +245,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                 logging.info(f'{pref}SKIPPED. Online version is same byte size, assuming same content. Not downloaded.')
                 return True, 0
     except Exception as err:
-        logging.error(f"{pref}FAIL. Media couldn't be retrieved: {url} Filename: {filename} Because: {err}")
+        logging.error(f"{pref}FAIL. Media couldn't be retrieved from {url} because of exception: {err}")
         return False, 0
 
 
