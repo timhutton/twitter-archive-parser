@@ -343,8 +343,7 @@ def main():
     print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
     # Ask user if they want to try downloading larger images
-    print('\n----------------------\n')
-    print(f"The archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
+    print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
     print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
