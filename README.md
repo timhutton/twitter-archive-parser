@@ -22,6 +22,13 @@ Our script does the following:
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Afterwards, it asks if you want to try downloading the original size images.
 
+## For advanced users
+
+The image download functionality requires the `requests` and `imagesize` modules.
+`parser.py` will offer to install these for you if you select to download images.
+But if you want to install them in advance you can use:
+
+    pip install -r requirements.txt
 
 ## TODO:
 - Likes ([#22](https://github.com/timhutton/twitter-archive-parser/issues/22)), DMs ([#6](https://github.com/timhutton/twitter-archive-parser/issues/6)), ALT-text ([#20](https://github.com/timhutton/twitter-archive-parser/issues/20)), Followers & Followings ([#70](https://github.com/timhutton/twitter-archive-parser/issues/70))
