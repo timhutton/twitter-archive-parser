@@ -213,18 +213,19 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
             byte_size_after = int(res.headers['content-length'])
             if (byte_size_after != byte_size_before):
                 # Proceed with the full download
-                print(f'{pref}Downloading {url}...', end='\r')
-                with open(filename+'.tmp','wb') as f:
+                tmp_filename = filename+'.tmp'
+                print(f'{pref}Downloading {url}...            ', end='\r')
+                with open(tmp_filename,'wb') as f:
                     shutil.copyfileobj(res.raw, f)
                 post = f'{byte_size_after/2**20:.1f}MB downloaded'
                 width_before, height_before = imagesize.get(filename)
-                width_after, height_after = imagesize.get(filename+'.tmp')
+                width_after, height_after = imagesize.get(tmp_filename)
                 pixels_before, pixels_after = width_before * height_before, width_after * height_after
                 pixels_percentage_increase = 100.0 * (pixels_after - pixels_before) / pixels_before
 
                 if (width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1):
                     # could not check size of both versions, probably a video or unsupported image format
-                    os.replace(filename+'.tmp', filename)
+                    os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% '
                                  f'larger in bytes (pixel comparison not possible). {post}')
@@ -235,7 +236,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                                  f'{width_before}*{height_before}px vs. {width_after}*{height_after}px. {post}')
                     return False, byte_size_after
                 elif (pixels_after >= pixels_before):
-                    os.replace(filename+'.tmp', filename)
+                    os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     if (bytes_percentage_increase >= 0):
                         logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes ' 
