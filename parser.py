@@ -31,6 +31,10 @@ import sys
 import time
 
 
+# Print a compile-time error. This line does nothing in Python 3 but is reported to the user as an error in Python 2.
+f' Error: You might be using Python 2. This script requires Python 3.'
+
+
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
     with open(filename, 'r', encoding='utf8') as f:
@@ -239,10 +243,10 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                     os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     if (bytes_percentage_increase >= 0):
-                        logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes ' 
+                        logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes '
                                     f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
                     else:
-                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes ' 
+                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes '
                                 f'but {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
                     return True, byte_size_after
                 else:
