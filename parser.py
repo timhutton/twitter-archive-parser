@@ -207,7 +207,9 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
     try:
         with requests.get(url, stream=True) as res:
             if not res.status_code == 200:
-                raise Exception('Download failed')
+                # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
+                # It is successfully tested with error responses from other domains.
+                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"')
             byte_size_after = int(res.headers['content-length'])
             if (byte_size_after != byte_size_before):
                 # Proceed with the full download
