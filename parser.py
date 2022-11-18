@@ -161,6 +161,29 @@ def import_module(module):
         return importlib.import_module(module)
 
 
+def find_input_filenames(data_folder):
+    """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
+    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
+    input_filenames = []
+    for tweet_js_filename_template in tweet_js_filename_templates:
+        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
+    if len(input_filenames)==0:
+        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
+        exit()
+    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
+    tweet_media_folder_names = []
+    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
+        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
+    if len(tweet_media_folder_names) == 0:
+        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    if len(tweet_media_folder_names) > 1:
+        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    archive_media_folder = tweet_media_folder_names[0]
+    return input_filenames, archive_media_folder
+
+
 def main():
 
     input_folder = '.'
@@ -168,6 +191,8 @@ def main():
     tweet_icon_path = f'{output_media_folder_name}tweet.ico'
     media_sources_filename = 'media_sources.txt'
     output_html_filename = 'TweetArchive.html'
+    data_folder = os.path.join(input_folder, 'data')
+    account_js_filename = os.path.join(data_folder, 'account.js')
 
     HTML = """\
 <!doctype html>
@@ -187,36 +212,19 @@ def main():
 </body>
 </html>"""
 
-    # Identify the file and folder names - they change slightly depending on the archive size it seems
-    data_folder = os.path.join(input_folder, 'data')
-    account_js_filename = os.path.join(data_folder, 'account.js')
+    # Extract the username from data/account.js
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
-    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
-    input_filenames = []
-    for tweet_js_filename_template in tweet_js_filename_templates:
-        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
-    if len(input_filenames)==0:
-        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
-        exit()
-    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
-    tweet_media_folder_names = []
-    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
-        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
-    if len(tweet_media_folder_names)==0:
-        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
-        exit()
-    if len(tweet_media_folder_names) > 1:
-        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
-        exit()
-    archive_media_folder = tweet_media_folder_names[0]
-    os.makedirs(output_media_folder_name, exist_ok = True)
+    username = extract_username(account_js_filename)
 
+    # Identify the file and folder names - they change slightly depending on the archive size it seems.
+    input_filenames, archive_media_folder = find_input_filenames(data_folder)
+
+    # Make a folder to copy the images and videos into.
+    os.makedirs(output_media_folder_name, exist_ok = True)
     if not os.path.isfile(tweet_icon_path):
         shutil.copy('assets/images/favicon.ico', tweet_icon_path);
-
-    username = extract_username(account_js_filename)
 
     # Parse the tweets
     tweets = []
