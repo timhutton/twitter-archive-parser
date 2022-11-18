@@ -24,7 +24,9 @@ Our script does the following:
 
 
 ## TODO:
-- Parse likes and DMs too (Issues [#22](https://github.com/timhutton/twitter-archive-parser/issues/22) and [#6](https://github.com/timhutton/twitter-archive-parser/issues/6))
+- Likes ([#22](https://github.com/timhutton/twitter-archive-parser/issues/22)), DMs ([#6](https://github.com/timhutton/twitter-archive-parser/issues/6)), ALT-text ([#20](https://github.com/timhutton/twitter-archive-parser/issues/20)), Followers & Followings ([#70](https://github.com/timhutton/twitter-archive-parser/issues/70))
+- Expand all URL shorteners ([#42](https://github.com/timhutton/twitter-archive-parser/pull/42)): bit.ly, goo.gl etc.
+- Handle reply-to-self threads ([#64](https://github.com/timhutton/twitter-archive-parser/pull/64))
 
 ## Related tools:
 If our script doesn't do what you want then maybe a different tool will help:
