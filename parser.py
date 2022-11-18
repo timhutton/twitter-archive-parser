@@ -22,11 +22,14 @@ import datetime
 import glob
 import importlib
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
+
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -40,10 +43,12 @@ def read_json_from_js_file(filename):
         # parse the resulting JSON and return as a dict
         return json.loads(data)
 
+
 def extract_username(account_js_filename):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
+
 
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
                            tweet_icon_path, media_sources):
@@ -184,7 +189,7 @@ def find_input_filenames(data_folder):
     return input_filenames, archive_media_folder
 
 
-def download_media_if_larger(url, filename, index, count, sleep_time):
+def download_file_if_larger(url, filename, index, count, sleep_time):
     """Attempts to download from the specified URL. Overwrites file if larger.
        Returns whether the file is now known to be the largest available, and the number of bytes downloaded.
     """
@@ -218,6 +223,47 @@ def download_media_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
+def download_larger_media(media_sources, log_path):
+    """Uses (filename, URL) tuples in media_sources to download files from remote storage.
+       Aborts downloads if the remote file is the same size or smaller than the existing local version.
+       Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
+    """
+    # Log to file as well as the console
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
+    logfile_handler = logging.FileHandler(filename=log_path, mode='w')
+    logfile_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(logfile_handler)
+    # Download new versions
+    start_time = time.time()
+    total_bytes_downloaded = 0
+    sleep_time = 0.25
+    remaining_tries = 5
+    while remaining_tries > 0:
+        number_of_files = len(media_sources)
+        success_count = 0
+        retries = []
+        for index, (local_media_path, media_url) in enumerate(media_sources):
+            success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+            if success:
+                success_count += 1
+            else:
+                retries.append((local_media_path, media_url))
+            total_bytes_downloaded += bytes_downloaded
+        media_sources = retries
+        remaining_tries -= 1
+        sleep_time += 2
+        logging.info(f'\n{success_count} of {number_of_files} tested media files are known to be the best-quality available.\n')
+        if len(retries) == 0:
+            break
+        if remaining_tries > 0:
+            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. {remaining_tries} tries remaining.\n')
+    end_time = time.time()
+
+    logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
+    logging.info(f'Time taken: {end_time-start_time:.0f}s')
+    print(f'Wrote log to {log_path}')
+
+
 def main():
 
     input_folder = '.'
@@ -226,6 +272,7 @@ def main():
     output_html_filename = 'TweetArchive.html'
     data_folder = os.path.join(input_folder, 'data')
     account_js_filename = os.path.join(data_folder, 'account.js')
+    log_path = os.path.join(output_media_folder_name, 'download_log.txt')
 
     HTML = """\
 <!doctype html>
@@ -295,9 +342,17 @@ def main():
 
     print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
-    # Tell the user that it is possible to download better-quality media
-    print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
-    print("from Twitter then please run the script download_better_images.py")
+    # Ask user if they want to try downloading larger images
+    print('\n----------------------\n')
+    print(f"The archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
+    print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
+    print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
+    print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
+    print(f'before starting the download.')
+    user_input = input('\nOK to start downloading? [y/n]')
+    if user_input.lower() in ('y', 'yes'):
+        download_larger_media(media_sources, log_path)
+        print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
 
 if __name__ == "__main__":
