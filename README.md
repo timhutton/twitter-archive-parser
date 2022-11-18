@@ -2,6 +2,7 @@
 1. [Download your Twitter archive](https://twitter.com/settings/download_your_data) (Settings > Your account > Download an archive of your data).
 2. Unzip to a folder.
 3. Right-click this link [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) and select "Save Link as", and save into the folder where you extracted the archive.
+    - Or with wget: `wget https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py` 
 4. Run parser.py with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
 
 If you are having problems, the discussion here might be useful: https://mathstodon.xyz/@timhutton/109316834651128246
