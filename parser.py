@@ -194,32 +194,65 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
        Returns whether the file is now known to be the largest available, and the number of bytes downloaded.
     """
     requests = import_module('requests')
+    imagesize = import_module('imagesize')
+
+    pref = f'{index:3d}/{count:3d} {filename}: '
     # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
     if index > 1:
-        print(f'{index}/{count}: Sleeping...', end='\r')
+        print(f'{pref}Sleeping...', end='\r')
         time.sleep(sleep_time)
     # Request the URL (in stream mode so that we can conditionally abort depending on the headers)
-    print(f'{index}/{count}: Requesting headers for {url}...', end='\r')
-    size_before = os.path.getsize(filename)
+    print(f'{pref}Requesting headers for {url}...', end='\r')
+    byte_size_before = os.path.getsize(filename)
     try:
         with requests.get(url, stream=True) as res:
             if not res.status_code == 200:
-                raise Exception('Download failed')
-            size_after = int(res.headers['content-length'])
-            if size_after > size_before:
+                # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
+                # It is successfully tested with error responses from other domains.
+                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"')
+            byte_size_after = int(res.headers['content-length'])
+            if (byte_size_after != byte_size_before):
                 # Proceed with the full download
-                print(f'{index}/{count}: Downloading {url}...            ', end='\r')
-                with open(filename+'.tmp','wb') as f:
+                tmp_filename = filename+'.tmp'
+                print(f'{pref}Downloading {url}...            ', end='\r')
+                with open(tmp_filename,'wb') as f:
                     shutil.copyfileobj(res.raw, f)
-                os.replace(filename+'.tmp', filename)
-                percentage_increase = 100.0 * (size_after - size_before) / size_before
-                logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version from {url} that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
-                return True, size_after
+                post = f'{byte_size_after/2**20:.1f}MB downloaded'
+                width_before, height_before = imagesize.get(filename)
+                width_after, height_after = imagesize.get(tmp_filename)
+                pixels_before, pixels_after = width_before * height_before, width_after * height_after
+                pixels_percentage_increase = 100.0 * (pixels_after - pixels_before) / pixels_before
+
+                if (width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1):
+                    # could not check size of both versions, probably a video or unsupported image format
+                    os.replace(tmp_filename, filename)
+                    bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
+                    logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% '
+                                 f'larger in bytes (pixel comparison not possible). {post}')
+                    return True, byte_size_after
+                elif (width_before == -1 or height_before == -1 or width_after == -1 or height_after == -1):
+                    # could not check size of one version, this should not happen (corrupted download?)
+                    logging.info(f'{pref}SKIPPED. Pixel size comparison inconclusive: '
+                                 f'{width_before}*{height_before}px vs. {width_after}*{height_after}px. {post}')
+                    return False, byte_size_after
+                elif (pixels_after >= pixels_before):
+                    os.replace(tmp_filename, filename)
+                    bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
+                    if (bytes_percentage_increase >= 0):
+                        logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes ' 
+                                    f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                    else:
+                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes ' 
+                                f'but {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                    return True, byte_size_after
+                else:
+                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% smaller pixel size. {post}')
+                    return True, byte_size_after
             else:
-                logging.info(f'{index}/{count}: Skipped. Available version at {url} is same size or smaller than {filename}')
+                logging.info(f'{pref}SKIPPED. Online version is same byte size, assuming same content. Not downloaded.')
                 return True, 0
-    except:
-        logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
+    except Exception as err:
+        logging.error(f"{pref}FAIL. Media couldn't be retrieved from {url} because of exception: {err}")
         return False, 0
 
 
