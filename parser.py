@@ -31,8 +31,9 @@ import sys
 import time
 
 
-# Print a compile-time error. This line does nothing in Python 3 but is reported to the user as an error in Python 2.
-f' Error: You might be using Python 2. This script requires Python 3.'
+# Print a compile-time error in Python < 3.6. This line does nothing in Python 3.6+ but is reported to the user
+# as an error (because it is the first line that fails to compile) in older versions.
+f' Error: This script requires Python 3.6 or later.'
 
 
 def read_json_from_js_file(filename):
