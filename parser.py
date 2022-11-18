@@ -219,7 +219,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
 
                 if (width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1):
                     # could not check size of both versions, probably a video or unsupported image format
-                    os.rename(filename+'.tmp', filename)
+                    os.replace(filename+'.tmp', filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     logging.info(f'{index:3d}/{count:3d}: Success. New version is {bytes_percentage_increase:3.0f}% larger in bytes (pixel comparison not possible), {byte_size_after/2**20:.1f}MB downloaded, overwrote {filename}')
                     return True, byte_size_after
@@ -228,7 +228,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                     logging.info(f'{index:3d}/{count:3d}: Skipped. Pixel size comparison inconclusive: {width_before}*{height_before}px vs. {width_after}*{height_after}px. {byte_size_after/2**20:.1f}MB downloaded, file is {filename}')
                     return False, byte_size_after
                 elif (pixels_after >= pixels_before):
-                    os.rename(filename+'.tmp', filename)
+                    os.replace(filename+'.tmp', filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     logging.info(f'{index:3d}/{count:3d}: Success. New version is {bytes_percentage_increase:3.0f}% larger in bytes and {pixels_percentage_increase:3.0f}% larger in pixels, {byte_size_after/2**20:.1f}MB downloaded, overwrote {filename}')
                     return True, byte_size_after
