@@ -20,10 +20,16 @@
 from collections import defaultdict
 import datetime
 import glob
+import importlib
 import json
+import logging
 import os
 import re
 import shutil
+import subprocess
+import sys
+import time
+
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -37,10 +43,12 @@ def read_json_from_js_file(filename):
         # parse the resulting JSON and return as a dict
         return json.loads(data)
 
+
 def extract_username(account_js_filename):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
+
 
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
                            tweet_icon_path, media_sources):
@@ -102,7 +110,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                     html += f'<img src="{new_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
+                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
@@ -128,7 +136,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                                     print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.write(' '.join([archive_media_filename, best_quality_url]) + '\n')
+                                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
                     else:
                         print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
@@ -144,13 +152,127 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
     return timestamp, body_markdown, body_html
 
+
+def import_module(module):
+    """Imports a module specified by a string. Example: requests = import_module('requests')"""
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        print(f'\nError: This script uses the "{module}" module which is not installed.\n')
+        user_input = input('OK to install using pip? [y/n]')
+        if not user_input.lower() in ('y', 'yes'):
+            exit()
+        subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
+        return importlib.import_module(module)
+
+
+def find_input_filenames(data_folder):
+    """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
+    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
+    input_filenames = []
+    for tweet_js_filename_template in tweet_js_filename_templates:
+        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
+    if len(input_filenames)==0:
+        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
+        exit()
+    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
+    tweet_media_folder_names = []
+    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
+        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
+    if len(tweet_media_folder_names) == 0:
+        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    if len(tweet_media_folder_names) > 1:
+        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        exit()
+    archive_media_folder = tweet_media_folder_names[0]
+    return input_filenames, archive_media_folder
+
+
+def download_file_if_larger(url, filename, index, count, sleep_time):
+    """Attempts to download from the specified URL. Overwrites file if larger.
+       Returns whether the file is now known to be the largest available, and the number of bytes downloaded.
+    """
+    requests = import_module('requests')
+    # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
+    if index > 1:
+        print(f'{index}/{count}: Sleeping...', end='\r')
+        time.sleep(sleep_time)
+    # Request the URL (in stream mode so that we can conditionally abort depending on the headers)
+    print(f'{index}/{count}: Requesting headers for {url}...', end='\r')
+    size_before = os.path.getsize(filename)
+    try:
+        with requests.get(url, stream=True) as res:
+            if not res.status_code == 200:
+                raise Exception('Download failed')
+            size_after = int(res.headers['content-length'])
+            if size_after > size_before:
+                # Proceed with the full download
+                print(f'{index}/{count}: Downloading {url}...            ', end='\r')
+                with open(filename+'.tmp','wb') as f:
+                    shutil.copyfileobj(res.raw, f)
+                os.replace(filename+'.tmp', filename)
+                percentage_increase = 100.0 * (size_after - size_before) / size_before
+                logging.info(f'{index}/{count}: Success. Overwrote {filename} with downloaded version from {url} that is {percentage_increase:.0f}% larger, {size_after/2**20:.1f}MB downloaded.')
+                return True, size_after
+            else:
+                logging.info(f'{index}/{count}: Skipped. Available version at {url} is same size or smaller than {filename}')
+                return True, 0
+    except:
+        logging.error(f"{index}/{count}: Fail. Media couldn't be retrieved: {url} Filename: {filename}")
+        return False, 0
+
+
+def download_larger_media(media_sources, log_path):
+    """Uses (filename, URL) tuples in media_sources to download files from remote storage.
+       Aborts downloads if the remote file is the same size or smaller than the existing local version.
+       Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
+    """
+    # Log to file as well as the console
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
+    logfile_handler = logging.FileHandler(filename=log_path, mode='w')
+    logfile_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(logfile_handler)
+    # Download new versions
+    start_time = time.time()
+    total_bytes_downloaded = 0
+    sleep_time = 0.25
+    remaining_tries = 5
+    while remaining_tries > 0:
+        number_of_files = len(media_sources)
+        success_count = 0
+        retries = []
+        for index, (local_media_path, media_url) in enumerate(media_sources):
+            success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+            if success:
+                success_count += 1
+            else:
+                retries.append((local_media_path, media_url))
+            total_bytes_downloaded += bytes_downloaded
+        media_sources = retries
+        remaining_tries -= 1
+        sleep_time += 2
+        logging.info(f'\n{success_count} of {number_of_files} tested media files are known to be the best-quality available.\n')
+        if len(retries) == 0:
+            break
+        if remaining_tries > 0:
+            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. {remaining_tries} tries remaining.\n')
+    end_time = time.time()
+
+    logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
+    logging.info(f'Time taken: {end_time-start_time:.0f}s')
+    print(f'Wrote log to {log_path}')
+
+
 def main():
 
     input_folder = '.'
     output_media_folder_name = 'media/'
     tweet_icon_path = f'{output_media_folder_name}tweet.ico'
-    media_sources_filename = 'media_sources.txt'
     output_html_filename = 'TweetArchive.html'
+    data_folder = os.path.join(input_folder, 'data')
+    account_js_filename = os.path.join(data_folder, 'account.js')
+    log_path = os.path.join(output_media_folder_name, 'download_log.txt')
 
     HTML = """\
 <!doctype html>
@@ -170,47 +292,30 @@ def main():
 </body>
 </html>"""
 
-    # Identify the file and folder names - they change slightly depending on the archive size it seems
-    data_folder = os.path.join(input_folder, 'data')
-    account_js_filename = os.path.join(data_folder, 'account.js')
+    # Extract the username from data/account.js
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
         exit()
-    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
-    input_filenames = []
-    for tweet_js_filename_template in tweet_js_filename_templates:
-        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
-    if len(input_filenames)==0:
-        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
-        exit()
-    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
-    tweet_media_folder_names = []
-    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
-        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
-    if len(tweet_media_folder_names)==0:
-        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
-        exit()
-    if len(tweet_media_folder_names) > 1:
-        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
-        exit()
-    archive_media_folder = tweet_media_folder_names[0]
-    os.makedirs(output_media_folder_name, exist_ok = True)
+    username = extract_username(account_js_filename)
 
+    # Identify the file and folder names - they change slightly depending on the archive size it seems.
+    input_filenames, archive_media_folder = find_input_filenames(data_folder)
+
+    # Make a folder to copy the images and videos into.
+    os.makedirs(output_media_folder_name, exist_ok = True)
     if not os.path.isfile(tweet_icon_path):
         shutil.copy('assets/images/favicon.ico', tweet_icon_path);
 
-    username = extract_username(account_js_filename)
-
     # Parse the tweets
     tweets = []
-    with open(os.path.join(output_media_folder_name, media_sources_filename), 'w') as media_sources:
-        for tweets_js_filename in input_filenames:
-            print(f'Parsing {tweets_js_filename}...')
-            json = read_json_from_js_file(tweets_js_filename)
-            for tweet in json:
-                tweets.append(convert_tweet(tweet, username, archive_media_folder,
-                                            output_media_folder_name, tweet_icon_path,
-                                            media_sources))
+    media_sources = []
+    for tweets_js_filename in input_filenames:
+        print(f'Parsing {tweets_js_filename}...')
+        json = read_json_from_js_file(tweets_js_filename)
+        for tweet in json:
+            tweets.append(convert_tweet(tweet, username, archive_media_folder,
+                                        output_media_folder_name, tweet_icon_path,
+                                        media_sources))
     print(f'Parsed {len(tweets)} tweets and replies by {username}.')
 
     # Sort tweets with oldest first
@@ -237,9 +342,16 @@ def main():
 
     print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
-    # Tell the user that it is possible to download better-quality media
-    print("\nThe archive doesn't contain the original-size images. If you are interested in retrieving the original images")
-    print("from Twitter then please run the script download_better_images.py")
+    # Ask user if they want to try downloading larger images
+    print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
+    print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
+    print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
+    print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
+    print(f'before starting the download.')
+    user_input = input('\nOK to start downloading? [y/n]')
+    if user_input.lower() in ('y', 'yes'):
+        download_larger_media(media_sources, log_path)
+        print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
 
 if __name__ == "__main__":

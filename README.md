@@ -4,10 +4,6 @@
 3. Right-click this link [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) and select "Save Link as", and save into the folder where you extracted the archive.
 4. Run parser.py with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
 
-If you want to download full-sized images:
-1. Right-click this link [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py) and select "Save Link as", and save into the folder where you extracted the archive.
-2. Run download_better_images.py with Python3. e.g. `python download_better_images.py` from a command prompt opened in that folder.
-
 If you are having problems, the discussion here might be useful: https://mathstodon.xyz/@timhutton/109316834651128246
 
 ## What does it do?
@@ -23,7 +19,7 @@ Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) and also HTML, with embedded images, videos and links.
 - Replaces t.co URLs with their original versions.
 - Copies used images to an output folder, to allow them to be moved to a new home.
-- Afterwards, it asks if you want to try downloading the original size images using [download_better_images.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/download_better_images.py).
+- Afterwards, it asks if you want to try downloading the original size images.
 
 
 ## TODO:
