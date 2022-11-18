@@ -235,11 +235,15 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                 elif (pixels_after >= pixels_before):
                     os.replace(filename+'.tmp', filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
-                    logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes ' 
-                                 f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                    if (bytes_percentage_increase >= 0):
+                        logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes ' 
+                                    f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                    else:
+                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes ' 
+                                f'but {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
                     return True, byte_size_after
                 else:
-                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% smaller pixel. {post}')
+                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% smaller pixel size. {post}')
                     return True, byte_size_after
             else:
                 logging.info(f'{pref}SKIPPED. Online version is same byte size, assuming same content. Not downloaded.')
