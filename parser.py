@@ -62,7 +62,8 @@ def extract_username(account_js_filename):
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
                            tweet_icon_path, media_sources):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
-    tweet = tweet['tweet']
+    if 'tweet' in tweet.keys():
+        tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
     timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
     body_markdown = tweet['full_text']
