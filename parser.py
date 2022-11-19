@@ -332,6 +332,7 @@ def main():
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
+    output_dms_filename = 'DMs.md'
     user_id_URL = 'https://twitter.com/i/user/{}'
 
     HTML = """\
@@ -405,6 +406,34 @@ def main():
     with open(output_followers_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
 
+    # Parse the DMs
+    dms_markdown = ''
+    dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
+    for conversation in dms_json:
+        markdown = ''
+        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+            dm_conversation = conversation['dmConversation']
+            conversation_id = dm_conversation['conversationId']
+            user1_id,user2_id = conversation_id.split('-')
+            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL.format(user1_id)
+            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL.format(user2_id)
+            markdown += f'### Conversation between {user1_handle} and {user2_handle} ####\n'
+            if 'messages' in dm_conversation:
+                for message in dm_conversation['messages']:
+                    if 'messageCreate' in message:
+                        messageCreate = message['messageCreate']
+                        if all(tag in messageCreate for tag in ['senderId', 'recipientId', 'text']):
+                            from_id = messageCreate['senderId']
+                            to_id = messageCreate['recipientId']
+                            body = messageCreate['text']
+                            from_handle = users[from_id].handle if from_id in users else user_id_URL.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_URL.format(to_id)
+                            markdown += f'\n\n{from_handle} -> {to_handle}:\n{body}'
+        dms_markdown += '\n\n----\n\n' + markdown
+    # output as a single file for now
+    with open(output_dms_filename, 'w', encoding='utf8') as f:
+        f.write(dms_markdown)
+
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
 
@@ -427,7 +456,7 @@ def main():
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(HTML.format(all_html_string))
 
-    print(f'Wrote tweets to *.md and {output_html_filename} and {output_following_filename} and {output_followers_filename}, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote tweets to *.md and {output_html_filename} and {output_following_filename} and {output_followers_filename} and {output_dms_filename}, with images and video embedded from {output_media_folder_name}')
 
     # Ask user if they want to try downloading larger images
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
