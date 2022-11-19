@@ -162,7 +162,8 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                 tweet['entities']['urls'].append({
                     'url': word,
                     'expanded_url': word,
-                    'display_url': netloc_short + path_short
+                    'display_url': netloc_short + path_short,
+                    'indices': [tweet['full_text'].index(word), tweet['full_text'].index(word) + len(word)],
                 })
     # replace t.co URLs with their original versions
     if 'entities' in tweet and 'urls' in tweet['entities']:
