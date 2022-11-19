@@ -36,6 +36,12 @@ import time
 f' Error: This script requires Python 3.6 or later.'
 
 
+class UserData:
+    def __init__(self, id, handle = None):
+        self.id = id
+        self.handle = handle
+
+
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
     with open(filename, 'r', encoding='utf8') as f:
@@ -56,7 +62,7 @@ def extract_username(account_js_filename):
 
 
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
-                           tweet_icon_path, media_sources):
+                  tweet_icon_path, media_sources, users):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
@@ -155,6 +161,19 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
     body_markdown = header_markdown + body_markdown + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
     body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    # extract user_id:handle connections
+    if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
+        id = tweet['in_reply_to_user_id']
+        if int(id) >= 0: # some ids are -1, not sure why
+            handle = tweet['in_reply_to_screen_name']
+            users[id] = UserData(id=id, handle=handle)
+    if 'entities' in tweet and 'user_mentions' in tweet['entities']:
+        for mention in tweet['entities']['user_mentions']:
+            id = mention['id']
+            if int(id) >= 0: # some ids are -1, not sure why
+                handle = mention['screen_name']
+                users[id] = UserData(id=id, handle=handle)
+
     return timestamp, body_markdown, body_html
 
 
@@ -330,6 +349,8 @@ def main():
 </body>
 </html>"""
 
+    users = {}
+
     # Extract the username from data/account.js
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
@@ -353,8 +374,9 @@ def main():
         for tweet in json:
             tweets.append(convert_tweet(tweet, username, archive_media_folder,
                                         output_media_folder_name, tweet_icon_path,
-                                        media_sources))
+                                        media_sources, users))
     print(f'Parsed {len(tweets)} tweets and replies by {username}.')
+    print(f'Found {len(users)} user_id:handle mappings.')
 
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
