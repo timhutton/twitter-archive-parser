@@ -18,6 +18,7 @@
 """
 
 from collections import defaultdict
+from urllib.parse import urlparse
 import datetime
 import glob
 import importlib
@@ -149,6 +150,13 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     body_markdown = tweet['full_text']
     body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
+    # for old tweets before embedded t.co redirects were added, ensure the links are
+    # added to the urls entities list so that we can build correct links later on.
+    if 'entities' in tweet and 'media' not in tweet['entities'] and len(tweet['entities'].get("urls", [])) == 0:
+        for word in tweet['full_text'].split():
+            url = urlparse(word)
+            if url.scheme != '' and url.netloc != '':
+                tweet['entities']['urls'].append({'url': word, 'expanded_url': word})
     # replace t.co URLs with their original versions
     if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
