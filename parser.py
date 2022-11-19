@@ -335,6 +335,9 @@ def main():
     data_folder = os.path.join(input_folder, 'data')
     account_js_filename = os.path.join(data_folder, 'account.js')
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
+    output_following_filename = 'following.txt'
+    output_followers_filename = 'followers.txt'
+    user_id_URL = 'https://twitter.com/i/user/{}'
 
     HTML = """\
 <!doctype html>
@@ -383,6 +386,30 @@ def main():
     print(f'Parsed {len(tweets)} tweets and replies by {username}.')
     print(f'Found {len(users)} user_id:handle mappings.')
 
+    # Parse the followings
+    following = []
+    following_json = read_json_from_js_file(os.path.join(data_folder, 'following.js'))
+    for follow in following_json:
+        if 'following' in follow and 'accountId' in follow['following']:
+            id = follow['following']['accountId']
+            handle = users[id].handle if id in users else '~unknown~handle~'
+            following.append(handle + ' ' + user_id_URL.format(id))
+    following.sort()
+    with open(output_following_filename, 'w', encoding='utf8') as f:
+        f.write('\n'.join(following))
+
+    # Parse the followers
+    followers = []
+    follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
+    for follower in follower_json:
+        if 'follower' in follower and 'accountId' in follower['follower']:
+            id = follower['follower']['accountId']
+            handle = users[id].handle if id in users else '~unknown~handle~'
+            followers.append(handle + ' ' + user_id_URL.format(id))
+    followers.sort()
+    with open(output_followers_filename, 'w', encoding='utf8') as f:
+        f.write('\n'.join(followers))
+
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
 
@@ -405,7 +432,7 @@ def main():
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(HTML.format(all_html_string))
 
-    print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote tweets to *.md and {output_html_filename} and {output_following_filename} and {output_followers_filename}, with images and video embedded from {output_media_folder_name}')
 
     # Ask user if they want to try downloading larger images
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
