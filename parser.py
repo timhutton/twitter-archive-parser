@@ -362,7 +362,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
-def download_larger_media(media_sources, log_path):
+def download_larger_media(media_sources, log_path, state_path):
     """Uses (filename, URL) tuples in media_sources to download files from remote storage.
        Aborts downloads if the remote file is the same size or smaller than the existing local version.
        Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
@@ -377,12 +377,24 @@ def download_larger_media(media_sources, log_path):
     total_bytes_downloaded = 0
     sleep_time = 0.25
     remaining_tries = 5
+    # State store
+    try:
+        with open(state_path, 'r') as state_file:
+            state = json.load(state_file)
+    except (IOError, json.decoder.JSONDecodeError):
+        state = {}
     while remaining_tries > 0:
         number_of_files = len(media_sources)
         success_count = 0
         retries = []
         for index, (local_media_path, media_url) in enumerate(media_sources):
-            success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+            if state.get(media_url, {}).get('success'):
+                logging.info(f'{index + 1:3d}/{number_of_files:3d}  {local_media_path}: SKIPPED. File already successfully fetched. Not attempting to download.')
+                success = state.get(media_url, {}).get('success', False)
+                bytes_downloaded = state.get(media_url, {}).get('bytes_downloaded', 0)
+            else:
+                success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+                state.update({media_url: {"local": local_media_path, "success": success, "downloaded": bytes_downloaded}})
             if success:
                 success_count += 1
             else:
@@ -401,6 +413,8 @@ def download_larger_media(media_sources, log_path):
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
     print(f'Wrote log to {log_path}')
+    with open(state_path, 'w') as state_file:
+        json.dump(state, state_file, sort_keys=True, indent=4)
 
 
 def parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
@@ -598,6 +612,7 @@ def main():
     data_folder = os.path.join(input_folder, 'data')
     account_js_filename = os.path.join(data_folder, 'account.js')
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
+    state_path = os.path.join(output_media_folder_name, 'media_state.json')
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
     user_id_URL_template = 'https://twitter.com/i/user/{}'
@@ -649,9 +664,9 @@ def main():
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
     print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
     print(f'before starting the download.')
-    user_input = input('\nOK to start downloading? [y/n]')
+    user_input = input('\nOK to start downloading? [y/N]')
     if user_input.lower() in ('y', 'yes'):
-        download_larger_media(media_sources, log_path)
+        download_larger_media(media_sources, log_path, state_path)
         print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
 
