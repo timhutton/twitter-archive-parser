@@ -391,8 +391,7 @@ def main():
             following.append(handle + ' ' + user_id_URL.format(id))
     following.sort()
     with open(output_following_filename, 'w', encoding='utf8') as f:
-        for user in following:
-            f.write(user + '\n')
+        f.write('\n'.join(following))
 
     # Parse the followers
     followers = []
@@ -404,8 +403,7 @@ def main():
             followers.append(handle + ' ' + user_id_URL.format(id))
     followers.sort()
     with open(output_followers_filename, 'w', encoding='utf8') as f:
-        for user in followers:
-            f.write(user + '\n')
+        f.write('\n'.join(followers))
 
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
