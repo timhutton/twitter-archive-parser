@@ -332,6 +332,7 @@ def main():
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
+    unknown_user_URL = 'https://twitter.com/i/user/{}'
 
     HTML = """\
 <!doctype html>
@@ -386,7 +387,7 @@ def main():
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
             id = follow['following']['accountId']
-            following.append(users[id].handle if id in users else '~unknown~user~' + id)
+            following.append(users[id].handle if id in users else unknown_user_URL.format(id))
     following.sort()
     with open(output_following_filename, 'w', encoding='utf8') as f:
         for user in following:
@@ -398,7 +399,7 @@ def main():
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
             id = follower['follower']['accountId']
-            followers.append(users[id].handle if id in users else '~unknown~user~' + id)
+            followers.append(users[id].handle if id in users else unknown_user_URL.format(id))
     followers.sort()
     with open(output_followers_filename, 'w', encoding='utf8') as f:
         for user in followers:
