@@ -378,6 +378,44 @@ def download_larger_media(media_sources, log_path):
     print(f'Wrote log to {log_path}')
 
 
+def parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
+                 output_media_folder_name, tweet_icon_path, output_html_filename):
+    """Read tweets from input_filenames, write to *.md and output_html_filename.
+       Copy the media used to output_media_folder_name.
+       Collect user_id:user_handle mappings for later use.
+   """
+    tweets = []
+    media_sources = []
+    for tweets_js_filename in input_filenames:
+        json = read_json_from_js_file(tweets_js_filename)
+        for tweet in json:
+            tweets.append(convert_tweet(tweet, username, archive_media_folder,
+                                        output_media_folder_name, tweet_icon_path,
+                                        media_sources, users))
+    tweets.sort(key=lambda tup: tup[0]) # oldest first
+
+    # Group tweets by month (for markdown)
+    grouped_tweets_markdown = defaultdict(list)
+    for timestamp, md, _ in tweets:
+        # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
+        grouped_tweets_markdown[markdown_filename].append(md)
+
+    # Write into *.md files
+    for filename, md in grouped_tweets_markdown.items():
+        md_string =  '\n\n----\n\n'.join(md)
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(md_string)
+
+    # Write into html file
+    all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
+    with open(output_html_filename, 'w', encoding='utf-8') as f:
+        f.write(html_template.format(all_html_string))
+
+    print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+
+
 def main():
 
     input_folder = '.'
@@ -392,7 +430,7 @@ def main():
     output_dms_filename = 'DMs.md'
     user_id_URL = 'https://twitter.com/i/user/{}'
 
-    HTML = """\
+    html_template = """\
 <!doctype html>
 <html lang="en">
 <head>
@@ -426,17 +464,8 @@ def main():
     if not os.path.isfile(tweet_icon_path):
         shutil.copy('assets/images/favicon.ico', tweet_icon_path);
 
-    # Parse the tweets
-    tweets = []
-    media_sources = []
-    for tweets_js_filename in input_filenames:
-        json = read_json_from_js_file(tweets_js_filename)
-        for tweet in json:
-            tweets.append(convert_tweet(tweet, username, archive_media_folder,
-                                        output_media_folder_name, tweet_icon_path,
-                                        media_sources, users))
-    print(f'Parsed {len(tweets)} tweets and replies by {username}.')
-    print(f'Found {len(users)} user_id:handle mappings.')
+    parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
+                 output_media_folder_name, tweet_icon_path, output_html_filename)
 
     # Parse the followings
     following = []
@@ -470,7 +499,7 @@ def main():
         f.write('\n'.join(followers))
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
-    # Parse the DMs
+    # Scan the DMs for missing users
     dms_markdown = ''
     dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
     dm_user_ids = set()
@@ -482,7 +511,7 @@ def main():
             dm_user_ids.add(user1_id)
             dm_user_ids.add(user2_id)
     lookup_users(list(dm_user_ids), users)
-
+    # Parse the DMs
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -515,31 +544,7 @@ def main():
         f.write(dms_markdown)
     print(f"Wrote {len(dms_json)} conversations to {output_dms_filename}")
 
-    # Sort tweets with oldest first
-    tweets.sort(key=lambda tup: tup[0])
-
-    # Group tweets by month (for markdown)
-    grouped_tweets_markdown = defaultdict(list)
-    for timestamp, md, _ in tweets:
-        # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
-        dt = datetime.datetime.fromtimestamp(timestamp)
-        markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
-        grouped_tweets_markdown[markdown_filename].append(md)
-
-    # Write into *.md files
-    for filename, md in grouped_tweets_markdown.items():
-        md_string =  '\n\n----\n\n'.join(md)
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(md_string)
-
-    # Write into html file
-    all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
-    with open(output_html_filename, 'w', encoding='utf-8') as f:
-        f.write(HTML.format(all_html_string))
-
-    print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
-
-    # Ask user if they want to try downloading larger images
+    # Download larger images
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
