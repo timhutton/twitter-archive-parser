@@ -29,6 +29,9 @@ import shutil
 import subprocess
 import sys
 import time
+# hot-loaded if needed: (see import_module())
+#  imagesize
+#  requests
 
 
 # Print a compile-time error in Python < 3.6. This line does nothing in Python 3.6+ but is reported to the user
@@ -40,6 +43,19 @@ class UserData:
     def __init__(self, id, handle = None):
         self.id = id
         self.handle = handle
+
+
+def import_module(module):
+    """Imports a module specified by a string. Example: requests = import_module('requests')"""
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        print(f'\nError: This script uses the "{module}" module which is not installed.\n')
+        user_input = input('OK to install using pip? [y/n]')
+        if not user_input.lower() in ('y', 'yes'):
+            exit()
+        subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
+        return importlib.import_module(module)
 
 
 def get_twitter_api_guest_token(session, bearer_token):
@@ -229,19 +245,6 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                 users[id] = UserData(id=id, handle=handle)
 
     return timestamp, body_markdown, body_html
-
-
-def import_module(module):
-    """Imports a module specified by a string. Example: requests = import_module('requests')"""
-    try:
-        return importlib.import_module(module)
-    except ImportError:
-        print(f'\nError: This script uses the "{module}" module which is not installed.\n')
-        user_input = input('OK to install using pip? [y/n]')
-        if not user_input.lower() in ('y', 'yes'):
-            exit()
-        subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
-        return importlib.import_module(module)
 
 
 def find_input_filenames(data_folder):
