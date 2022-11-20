@@ -455,6 +455,56 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
         f.write('\n'.join(followers))
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
+
+def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename):
+    """Parse data_folder/direct-messages.js, write to output_followers_filename.
+       Query Twitter API for the missing user handles, if the user agrees.
+    """
+    dms_markdown = ''
+    dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
+    dm_user_ids = set()
+    for conversation in dms_json:
+        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+            dm_conversation = conversation['dmConversation']
+            conversation_id = dm_conversation['conversationId']
+            user1_id, user2_id = conversation_id.split('-')
+            dm_user_ids.add(user1_id)
+            dm_user_ids.add(user2_id)
+    lookup_users(list(dm_user_ids), users)
+    # Parse the DMs
+    for conversation in dms_json:
+        markdown = ''
+        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+            dm_conversation = conversation['dmConversation']
+            conversation_id = dm_conversation['conversationId']
+            user1_id,user2_id = conversation_id.split('-')
+            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL_template.format(user1_id)
+            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL_template.format(user2_id)
+            markdown += f'## Conversation between {user1_handle} and {user2_handle}: ##\n'
+            messages = []
+            if 'messages' in dm_conversation:
+                for message in dm_conversation['messages']:
+                    if 'messageCreate' in message:
+                        messageCreate = message['messageCreate']
+                        if all(tag in messageCreate for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
+                            from_id = messageCreate['senderId']
+                            to_id = messageCreate['recipientId']
+                            body = messageCreate['text']
+                            created_at = messageCreate['createdAt'] # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
+                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
+                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
+                            messages.append((timestamp, message_markdown))
+            messages.sort(key=lambda tup: tup[0])
+            markdown += ''.join(md for _, md in messages)
+        dms_markdown += '\n\n----\n\n' + markdown
+    # output as a single file for now
+    with open(output_dms_filename, 'w', encoding='utf8') as f:
+        f.write(dms_markdown)
+    print(f"Wrote {len(dms_json)} conversations to {output_dms_filename}")
+
+
 def main():
 
     input_folder = '.'
@@ -507,51 +557,7 @@ def main():
                  output_media_folder_name, tweet_icon_path, output_html_filename)
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-
-    # Scan the DMs for missing users
-    dms_markdown = ''
-    dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
-    dm_user_ids = set()
-    for conversation in dms_json:
-        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
-            dm_conversation = conversation['dmConversation']
-            conversation_id = dm_conversation['conversationId']
-            user1_id, user2_id = conversation_id.split('-')
-            dm_user_ids.add(user1_id)
-            dm_user_ids.add(user2_id)
-    lookup_users(list(dm_user_ids), users)
-    # Parse the DMs
-    for conversation in dms_json:
-        markdown = ''
-        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
-            dm_conversation = conversation['dmConversation']
-            conversation_id = dm_conversation['conversationId']
-            user1_id,user2_id = conversation_id.split('-')
-            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL_template.format(user1_id)
-            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL_template.format(user2_id)
-            markdown += f'## Conversation between {user1_handle} and {user2_handle}: ##\n'
-            messages = []
-            if 'messages' in dm_conversation:
-                for message in dm_conversation['messages']:
-                    if 'messageCreate' in message:
-                        messageCreate = message['messageCreate']
-                        if all(tag in messageCreate for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
-                            from_id = messageCreate['senderId']
-                            to_id = messageCreate['recipientId']
-                            body = messageCreate['text']
-                            created_at = messageCreate['createdAt'] # example: 2022-01-27T15:58:52.744Z
-                            timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
-                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
-                            messages.append((timestamp, message_markdown))
-            messages.sort(key=lambda tup: tup[0])
-            markdown += ''.join(md for _, md in messages)
-        dms_markdown += '\n\n----\n\n' + markdown
-    # output as a single file for now
-    with open(output_dms_filename, 'w', encoding='utf8') as f:
-        f.write(dms_markdown)
-    print(f"Wrote {len(dms_json)} conversations to {output_dms_filename}")
+    parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename)
 
     # Download larger images
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
