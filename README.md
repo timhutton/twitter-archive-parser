@@ -26,6 +26,9 @@ Our script does the following:
 - Outputs lists of followers and following.
 - Afterwards, it asks if you want to try downloading the original size images.
 
+### For advanced users:
+
+Some of the functionality requires the `requests` and `imagesize` modules. `parser.py` will offer to install these for you using pip. To avoid that you can install them before running the script.
 
 ## TODO:
 - DM improvements ([#80](https://github.com/timhutton/twitter-archive-parser/issues/80))
