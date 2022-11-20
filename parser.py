@@ -387,7 +387,8 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
                  output_media_folder_name, tweet_icon_path, output_html_filename):
     """Read tweets from input_filenames, write to *.md and output_html_filename.
        Copy the media used to output_media_folder_name.
-       Collect user_id:user_handle mappings for later use.
+       Collect user_id:user_handle mappings for later use, in 'users'.
+       Returns the mapping from media filename to best-quality URL.
    """
     tweets = []
     media_sources = []
@@ -419,6 +420,8 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
         f.write(html_template.format(all_html_string))
 
     print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+
+    return media_sources
 
 
 def parse_followings(data_folder, users, user_id_URL_template, output_following_filename):
@@ -560,8 +563,8 @@ def main():
     if not os.path.isfile(tweet_icon_path):
         shutil.copy('assets/images/favicon.ico', tweet_icon_path);
 
-    parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
-                 output_media_folder_name, tweet_icon_path, output_html_filename)
+    media_sources = parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
+                                 output_media_folder_name, tweet_icon_path, output_html_filename)
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
     parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename)
