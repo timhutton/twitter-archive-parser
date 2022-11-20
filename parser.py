@@ -416,6 +416,26 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
 
+def parse_followings(data_folder, users, user_id_URL_template, output_following_filename):
+    """Parse data_folder/following.js, write to output_following_filename.
+       Query Twitter API for the missing user handles, if the user agrees.
+    """
+    following = []
+    following_json = read_json_from_js_file(os.path.join(data_folder, 'following.js'))
+    following_ids = []
+    for follow in following_json:
+        if 'following' in follow and 'accountId' in follow['following']:
+            following_ids.append(follow['following']['accountId'])
+    lookup_users(following_ids, users)
+    for id in following_ids:
+        handle = users[id].handle if id in users else '~unknown~handle~'
+        following.append(handle + ' ' + user_id_URL_template.format(id))
+    following.sort()
+    with open(output_following_filename, 'w', encoding='utf8') as f:
+        f.write('\n'.join(following))
+    print(f"Wrote {len(following)} accounts to {output_following_filename}")
+
+
 def main():
 
     input_folder = '.'
@@ -428,7 +448,7 @@ def main():
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
     output_dms_filename = 'DMs.md'
-    user_id_URL = 'https://twitter.com/i/user/{}'
+    user_id_URL_template = 'https://twitter.com/i/user/{}'
 
     html_template = """\
 <!doctype html>
@@ -467,21 +487,7 @@ def main():
     parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
                  output_media_folder_name, tweet_icon_path, output_html_filename)
 
-    # Parse the followings
-    following = []
-    following_json = read_json_from_js_file(os.path.join(data_folder, 'following.js'))
-    following_ids = []
-    for follow in following_json:
-        if 'following' in follow and 'accountId' in follow['following']:
-            following_ids.append(follow['following']['accountId'])
-    lookup_users(following_ids, users)
-    for id in following_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        following.append(handle + ' ' + user_id_URL.format(id))
-    following.sort()
-    with open(output_following_filename, 'w', encoding='utf8') as f:
-        f.write('\n'.join(following))
-    print(f"Wrote {len(following)} accounts to {output_following_filename}")
+    parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
 
     # Parse the followers
     followers = []
@@ -493,7 +499,7 @@ def main():
     lookup_users(follower_ids, users)
     for id in follower_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + user_id_URL.format(id))
+        followers.append(handle + ' ' + user_id_URL_template.format(id))
     followers.sort()
     with open(output_followers_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
@@ -518,8 +524,8 @@ def main():
             dm_conversation = conversation['dmConversation']
             conversation_id = dm_conversation['conversationId']
             user1_id,user2_id = conversation_id.split('-')
-            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL.format(user1_id)
-            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL.format(user2_id)
+            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL_template.format(user1_id)
+            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL_template.format(user2_id)
             markdown += f'## Conversation between {user1_handle} and {user2_handle}: ##\n'
             messages = []
             if 'messages' in dm_conversation:
@@ -532,8 +538,8 @@ def main():
                             body = messageCreate['text']
                             created_at = messageCreate['createdAt'] # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users else user_id_URL.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_URL.format(to_id)
+                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
             messages.sort(key=lambda tup: tup[0])
