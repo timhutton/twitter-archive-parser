@@ -475,6 +475,7 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
             dm_user_ids.add(user2_id)
     lookup_users(list(dm_user_ids), users)
     # Parse the DMs
+    num_written_messages = 0
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -501,11 +502,12 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
                             messages.append((timestamp, message_markdown))
             messages.sort(key=lambda tup: tup[0])
             markdown += ''.join(md for _, md in messages)
+            num_written_messages += len(messages)
         dms_markdown += '\n\n----\n\n' + markdown
     # output as a single file for now
     with open(output_dms_filename, 'w', encoding='utf8') as f:
         f.write(dms_markdown)
-    print(f"Wrote {len(dms_json)} conversations to {output_dms_filename}")
+    print(f"Wrote {len(dms_json)} conversations ({num_written_messages} total messages) to {output_dms_filename}")
 
 
 def main():
