@@ -29,7 +29,7 @@ import shutil
 import subprocess
 import sys
 import time
-# hot-loaded if needed: (see import_module())
+# hot-loaded if needed, see import_module():
 #  imagesize
 #  requests
 
@@ -67,6 +67,7 @@ def get_twitter_api_guest_token(session, bearer_token):
         raise Exception(f"Failed to retrieve guest token")
     return guest_token
 
+
 def get_twitter_users(session, bearer_token, guest_token, user_ids):
     """Asks Twitter for all metadata associated with user_ids."""
     users = {}
@@ -84,6 +85,7 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
         for user in response_json:
             users[user["id_str"]] = user
     return users
+
 
 def lookup_users(user_ids, users):
     """Fill the users dictionary with data from Twitter"""
@@ -105,6 +107,7 @@ def lookup_users(user_ids, users):
         retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
         for user_id, user in retrieved_users.items():
             users[user_id] = UserData(user_id, user["screen_name"])
+
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -559,7 +562,7 @@ def main():
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
     parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename)
 
-    # Download larger images
+    # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
