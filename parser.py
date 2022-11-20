@@ -436,6 +436,25 @@ def parse_followings(data_folder, users, user_id_URL_template, output_following_
     print(f"Wrote {len(following)} accounts to {output_following_filename}")
 
 
+def parse_followers(data_folder, users, user_id_URL_template, output_followers_filename):
+    """Parse data_folder/followers.js, write to output_followers_filename.
+       Query Twitter API for the missing user handles, if the user agrees.
+    """
+    followers = []
+    follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
+    follower_ids = []
+    for follower in follower_json:
+        if 'follower' in follower and 'accountId' in follower['follower']:
+            follower_ids.append(follower['follower']['accountId'])
+    lookup_users(follower_ids, users)
+    for id in follower_ids:
+        handle = users[id].handle if id in users else '~unknown~handle~'
+        followers.append(handle + ' ' + user_id_URL_template.format(id))
+    followers.sort()
+    with open(output_followers_filename, 'w', encoding='utf8') as f:
+        f.write('\n'.join(followers))
+    print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
+
 def main():
 
     input_folder = '.'
@@ -486,24 +505,8 @@ def main():
 
     parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
                  output_media_folder_name, tweet_icon_path, output_html_filename)
-
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
-
-    # Parse the followers
-    followers = []
-    follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
-    follower_ids = []
-    for follower in follower_json:
-        if 'follower' in follower and 'accountId' in follower['follower']:
-            follower_ids.append(follower['follower']['accountId'])
-    lookup_users(follower_ids, users)
-    for id in follower_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + user_id_URL_template.format(id))
-    followers.sort()
-    with open(output_followers_filename, 'w', encoding='utf8') as f:
-        f.write('\n'.join(followers))
-    print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
+    parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
 
     # Scan the DMs for missing users
     dms_markdown = ''
