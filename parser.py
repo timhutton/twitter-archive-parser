@@ -101,13 +101,15 @@ def lookup_users(user_ids, users):
     if user_input.lower() not in ('y', 'yes'):
         return
     requests = import_module('requests')
-    with requests.Session() as session:
-        bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
-        guest_token = get_twitter_api_guest_token(session, bearer_token)
-        retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
-        for user_id, user in retrieved_users.items():
-            users[user_id] = UserData(user_id, user["screen_name"])
-
+    try:
+        with requests.Session() as session:
+            bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+            guest_token = get_twitter_api_guest_token(session, bearer_token)
+            retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
+            for user_id, user in retrieved_users.items():
+                users[user_id] = UserData(user_id, user["screen_name"])
+    except Exception as err:
+        print(f'Failed to download user data: {err}')
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
