@@ -14,21 +14,21 @@ Flaws of the Twitter archive:
 - It shows you tweets you posted with images, but if you click on one of the images to expand it then it takes you to the Twitter website. If you are offline or have deleted your account or twitter.com is down then that won't work.
 - The tweets are stored in a complex JSON structure so you can't just copy them into your blog for example.
 - The images they give you are smaller than the ones you uploaded. I don't know why they would do this to us.
-- DMs are included but don't show you who they are from.
+- DMs are included but don't show you who they are from - many of the user handles aren't included in the archive.
 - The links are all obfuscated in a short form using t.co, which hides their origin and redirects traffic to Twitter, giving them analytics. Also they will stop working if t.co goes down.
 
 Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) and also HTML, with embedded images, videos and links.
 - Replaces t.co URLs with their original versions.
 - Copies used images to an output folder, to allow them to be moved to a new home.
-- Converts DMs to markdown, adds the user handles where known. Basic functionality for now, pending improvements.
+- Will query Twitter for the missing user handles (checks with you first)
+- Converts DMs to markdown. Basic functionality for now, pending improvements.
 - Outputs lists of followers and following.
 - Afterwards, it asks if you want to try downloading the original size images.
 
 
 ## TODO:
 - DM improvements ([#80](https://github.com/timhutton/twitter-archive-parser/issues/80))
-- Identify more user handles ([#79](https://github.com/timhutton/twitter-archive-parser/issues/79))
 - Likes ([#22](https://github.com/timhutton/twitter-archive-parser/issues/22)), ALT-text ([#20](https://github.com/timhutton/twitter-archive-parser/issues/20))
 - Expand all URL shorteners ([#42](https://github.com/timhutton/twitter-archive-parser/pull/42)): bit.ly, goo.gl etc.
 - Handle reply-to-self threads ([#23](https://github.com/timhutton/twitter-archive-parser/pull/23))
