@@ -76,6 +76,12 @@ def lookup_users(user_ids, users):
     if not filtered_user_ids:
         # Don't bother opening a session if there's nothing to get
         return
+    # Account metadata observed at ~2.1KB on average.
+    estimated_size = int(2.1 * len(filtered_user_ids))
+    print(f'{len(filtered_user_ids)} users are unknown.')
+    user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
+    if user_input.lower() not in ('y', 'yes'):
+        return
     requests = import_module('requests')
     with requests.Session() as session:
         bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
@@ -86,6 +92,7 @@ def lookup_users(user_ids, users):
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
+    print(f'Parsing {filename}...')
     with open(filename, 'r', encoding='utf8') as f:
         data = f.readlines()
         # if the JSON has no real content, it can happen that the file is only one line long.
@@ -420,7 +427,6 @@ def main():
     tweets = []
     media_sources = []
     for tweets_js_filename in input_filenames:
-        print(f'Parsing {tweets_js_filename}...')
         json = read_json_from_js_file(tweets_js_filename)
         for tweet in json:
             tweets.append(convert_tweet(tweet, username, archive_media_folder,
