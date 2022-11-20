@@ -19,12 +19,12 @@ Flaws of the Twitter archive:
 
 Our script does the following:
 - Converts the tweets to [markdown](https://en.wikipedia.org/wiki/Markdown) and also HTML, with embedded images, videos and links.
-- Replaces t.co URLs with their original versions.
+- Replaces t.co URLs with their original versions (the ones that can be found in the archive).
 - Copies used images to an output folder, to allow them to be moved to a new home.
-- Will query Twitter for the missing user handles (checks with you first)
+- Will query Twitter for the missing user handles (checks with you first).
 - Converts DMs to markdown. Basic functionality for now, pending improvements.
 - Outputs lists of followers and following.
-- Afterwards, it asks if you want to try downloading the original size images.
+- Downloads the original size images (checks with you first).
 
 ### For advanced users:
 
