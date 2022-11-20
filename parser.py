@@ -42,6 +42,48 @@ class UserData:
         self.handle = handle
 
 
+def get_twitter_api_guest_token(session, bearer_token):
+    """Returns a Twitter API guest token for the current session."""
+    guest_token_response = session.post("https://api.twitter.com/1.1/guest/activate.json",
+                                        headers={'authorization': f'Bearer {bearer_token}'})
+    guest_token = json.loads(guest_token_response.content)['guest_token']
+    if not guest_token:
+        raise Exception(f"Failed to retrieve guest token")
+    return guest_token
+
+def get_twitter_users(session, bearer_token, guest_token, user_ids):
+    """Asks Twitter for all metadata associated with user_ids."""
+    users = {}
+    while user_ids:
+        max_batch = 100
+        user_id_batch = user_ids[:max_batch]
+        user_ids = user_ids[max_batch:]
+        user_id_list = ",".join(user_id_batch)
+        query_url = f"https://api.twitter.com/1.1/users/lookup.json?user_id={user_id_list}"
+        response = session.get(query_url,
+                               headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token})
+        if not response.status_code == 200:
+            raise Exception(f'Failed to get user handle: {response}')
+        response_json = json.loads(response.content)
+        for user in response_json:
+            users[user["id_str"]] = user
+    return users
+
+def lookup_users(user_ids, users):
+    """Fill the users dictionary with data from Twitter"""
+    # Filter out any users already known
+    filtered_user_ids = [id for id in user_ids if id not in users]
+    if not filtered_user_ids:
+        # Don't bother opening a session if there's nothing to get
+        return
+    requests = import_module('requests')
+    with requests.Session() as session:
+        bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+        guest_token = get_twitter_api_guest_token(session, bearer_token)
+        retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
+        for user_id, user in retrieved_users.items():
+            users[user_id] = UserData(user_id, user["screen_name"])
+
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
     with open(filename, 'r', encoding='utf8') as f:
@@ -390,30 +432,48 @@ def main():
     # Parse the followings
     following = []
     following_json = read_json_from_js_file(os.path.join(data_folder, 'following.js'))
+    following_ids = []
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
-            id = follow['following']['accountId']
-            handle = users[id].handle if id in users else '~unknown~handle~'
-            following.append(handle + ' ' + user_id_URL.format(id))
+            following_ids.append(follow['following']['accountId'])
+    lookup_users(following_ids, users)
+    for id in following_ids:
+        handle = users[id].handle if id in users else '~unknown~handle~'
+        following.append(handle + ' ' + user_id_URL.format(id))
     following.sort()
     with open(output_following_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(following))
+    print(f"Wrote {len(following)} accounts to {output_following_filename}")
 
     # Parse the followers
     followers = []
     follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
+    follower_ids = []
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
-            id = follower['follower']['accountId']
-            handle = users[id].handle if id in users else '~unknown~handle~'
-            followers.append(handle + ' ' + user_id_URL.format(id))
+            follower_ids.append(follower['follower']['accountId'])
+    lookup_users(follower_ids, users)
+    for id in follower_ids:
+        handle = users[id].handle if id in users else '~unknown~handle~'
+        followers.append(handle + ' ' + user_id_URL.format(id))
     followers.sort()
     with open(output_followers_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
+    print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
     # Parse the DMs
     dms_markdown = ''
     dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
+    dm_user_ids = set()
+    for conversation in dms_json:
+        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+            dm_conversation = conversation['dmConversation']
+            conversation_id = dm_conversation['conversationId']
+            user1_id, user2_id = conversation_id.split('-')
+            dm_user_ids.add(user1_id)
+            dm_user_ids.add(user2_id)
+    lookup_users(list(dm_user_ids), users)
+
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -444,6 +504,7 @@ def main():
     # output as a single file for now
     with open(output_dms_filename, 'w', encoding='utf8') as f:
         f.write(dms_markdown)
+    print(f"Wrote {len(dms_json)} conversations to {output_dms_filename}")
 
     # Sort tweets with oldest first
     tweets.sort(key=lambda tup: tup[0])
@@ -467,7 +528,7 @@ def main():
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(HTML.format(all_html_string))
 
-    print(f'Wrote tweets to *.md and {output_html_filename} and {output_following_filename} and {output_followers_filename} and {output_dms_filename}, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
     # Ask user if they want to try downloading larger images
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
