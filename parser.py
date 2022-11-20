@@ -465,10 +465,11 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
 
 
 def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename):
-    """Parse data_folder/direct-messages.js, write to output_followers_filename.
+    """Parse data_folder/direct-messages.js, write to output_dms_filename.
        Query Twitter API for the missing user handles, if the user agrees.
     """
     dms_markdown = ''
+    # Scan the DMs for missing user handles
     dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
     dm_user_ids = set()
     for conversation in dms_json:
