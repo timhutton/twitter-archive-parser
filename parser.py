@@ -40,7 +40,7 @@ f' Error: This script requires Python 3.6 or later.'
 
 
 class UserData:
-    def __init__(self, id, handle = None):
+    def __init__(self, id, handle=None):
         self.id = id
         self.handle = handle
 
@@ -111,6 +111,7 @@ def lookup_users(user_ids, users):
     except Exception as err:
         print(f'Failed to download user data: {err}')
 
+
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
     print(f'Parsing {filename}...')
@@ -124,7 +125,7 @@ def read_json_from_js_file(filename):
         prefix = '['
         if '{' in data[0]:
             prefix += ' {'
-        data =  prefix + ''.join(data[1:])
+        data = prefix + ''.join(data[1:])
         # parse the resulting JSON and return as a dict
         return json.loads(data)
 
@@ -141,7 +142,8 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
-    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
+    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp()))
+    # Example: Tue Mar 19 14:05:17 +0000 2019
     body_markdown = tweet['full_text']
     body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
@@ -153,11 +155,12 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                 body_markdown = body_markdown.replace(url['url'], expanded_url)
                 expanded_url_html = f'<a href="{expanded_url}">{expanded_url}</a>'
                 body_html = body_html.replace(url['url'], expanded_url_html)
-    # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
+    # if the tweet is a reply, construct a header
+    # that links the names of the accounts being replied to the tweet being replied to
     header_markdown = ''
     header_html = ''
     if 'in_reply_to_status_id' in tweet:
-        # match and remove all occurences of '@username ' at the start of the body
+        # match and remove all occurrences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
             body_markdown = body_markdown[len(replying_to):]
@@ -175,7 +178,8 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
         header_markdown += f'Replying to [{name_list}]({replying_to_url})\n\n'
         header_html += f'Replying to <a href="{replying_to_url}">{name_list}</a><br>'
     # replace image URLs with image links to local files
-    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+    if 'entities' in tweet and 'media' in tweet['entities'] \
+            and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
         original_url = tweet['entities']['media'][0]['url']
         markdown = ''
         html = ''
@@ -196,7 +200,9 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                     html += f'<img src="{new_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                    media_sources.append(
+                        (os.path.join(output_media_folder_name, archive_media_filename), best_quality_url)
+                    )
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
@@ -208,7 +214,8 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                                 shutil.copy(archive_media_path, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                             html += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
-                            # Save the online location of the best-quality version of this file, for later upgrading if wanted
+                            # Save the online location of the best-quality version of this file,
+                            # for later upgrading if wanted
                             if 'video_info' in media and 'variants' in media['video_info']:
                                 best_quality_url = ''
                                 best_bitrate = -1 # some valid videos are marked with bitrate=0 in the JSON
@@ -219,12 +226,17 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                                             best_quality_url = variant['url']
                                             best_bitrate = bitrate
                                 if best_bitrate == -1:
-                                    print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
+                                    print(f"Warning No URL found for {original_url} "
+                                          f"{original_expanded_url} {archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                                    media_sources.append(
+                                        (os.path.join(output_media_folder_name, archive_media_filename),
+                                         best_quality_url)
+                                    )
                     else:
-                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        print(f'Warning: missing local file: {archive_media_path}. '
+                              f'Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
                         html += f'<a href="{original_url}">{original_url}</a>'
         body_markdown = body_markdown.replace(original_url, markdown)
@@ -234,8 +246,12 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     body_html = '<p><blockquote>' + '<br>\n'.join(body_html.splitlines()) + '</blockquote>'
     # append the original Twitter URL as a link
     original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
-    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
-    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    body_markdown = \
+        header_markdown + body_markdown + \
+        f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
+    body_html = \
+        header_html + body_html + \
+        f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
     if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
         id = tweet['in_reply_to_user_id']
@@ -253,12 +269,15 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
 
 
 def find_input_filenames(data_folder):
-    """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
+    """
+        Identify the tweet archive's file and folder names -
+        they change slightly depending on the archive size it seems.
+    """
     tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
     input_filenames = []
     for tweet_js_filename_template in tweet_js_filename_templates:
         input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
-    if len(input_filenames)==0:
+    if len(input_filenames) == 0:
         print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
         exit()
     tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
@@ -276,14 +295,15 @@ def find_input_filenames(data_folder):
 
 
 def download_file_if_larger(url, filename, index, count, sleep_time):
-    """Attempts to download from the specified URL. Overwrites file if larger.
+    """
+       Attempts to download from the specified URL. Overwrites file if larger.
        Returns whether the file is now known to be the largest available, and the number of bytes downloaded.
     """
     requests = import_module('requests')
     imagesize = import_module('imagesize')
 
     pref = f'{index:3d}/{count:3d} {filename}: '
-    # Sleep briefly, in an attempt to minimize the possibility of trigging some auto-cutoff mechanism
+    # Sleep briefly, in an attempt to minimize the possibility of triggering some auto-cutoff mechanism
     if index > 1:
         print(f'{pref}Sleeping...', end='\r')
         time.sleep(sleep_time)
@@ -293,11 +313,14 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
     try:
         with requests.get(url, stream=True) as res:
             if not res.status_code == 200:
-                # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
+                # Try to get content of response as `res.text`.
+                # For twitter.com, this will be empty in most (all?) cases.
                 # It is successfully tested with error responses from other domains.
-                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"')
+                raise Exception(
+                    f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"'
+                )
             byte_size_after = int(res.headers['content-length'])
-            if (byte_size_after != byte_size_before):
+            if byte_size_after != byte_size_before:
                 # Proceed with the full download
                 tmp_filename = filename+'.tmp'
                 print(f'{pref}Downloading {url}...            ', end='\r')
@@ -309,30 +332,32 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                 pixels_before, pixels_after = width_before * height_before, width_after * height_after
                 pixels_percentage_increase = 100.0 * (pixels_after - pixels_before) / pixels_before
 
-                if (width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1):
+                if width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1:
                     # could not check size of both versions, probably a video or unsupported image format
                     os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% '
                                  f'larger in bytes (pixel comparison not possible). {post}')
                     return True, byte_size_after
-                elif (width_before == -1 or height_before == -1 or width_after == -1 or height_after == -1):
+                elif width_before == -1 or height_before == -1 or width_after == -1 or height_after == -1:
                     # could not check size of one version, this should not happen (corrupted download?)
                     logging.info(f'{pref}SKIPPED. Pixel size comparison inconclusive: '
                                  f'{width_before}*{height_before}px vs. {width_after}*{height_after}px. {post}')
                     return False, byte_size_after
-                elif (pixels_after >= pixels_before):
+                elif pixels_after >= pixels_before:
                     os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
-                    if (bytes_percentage_increase >= 0):
+                    if bytes_percentage_increase >= 0:
                         logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes '
-                                    f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                                     f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
                     else:
-                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes '
-                                f'but {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% '
+                                     f'smaller in bytes but {pixels_percentage_increase:3.0f}% '
+                                     f'larger in pixels. {post}')
                     return True, byte_size_after
                 else:
-                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% smaller pixel size. {post}')
+                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% '
+                                 f'smaller pixel size. {post}')
                     return True, byte_size_after
             else:
                 logging.info(f'{pref}SKIPPED. Online version is same byte size, assuming same content. Not downloaded.')
@@ -371,11 +396,13 @@ def download_larger_media(media_sources, log_path):
         media_sources = retries
         remaining_tries -= 1
         sleep_time += 2
-        logging.info(f'\n{success_count} of {number_of_files} tested media files are known to be the best-quality available.\n')
+        logging.info(f'\n{success_count} of {number_of_files} tested media files '
+                     f'are known to be the best-quality available.\n')
         if len(retries) == 0:
             break
         if remaining_tries > 0:
-            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. {remaining_tries} tries remaining.\n')
+            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. '
+                  f'{remaining_tries} tries remaining.\n')
     end_time = time.time()
 
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
@@ -410,7 +437,7 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
 
     # Write into *.md files
     for filename, md in grouped_tweets_markdown.items():
-        md_string =  '\n\n----\n\n'.join(md)
+        md_string = '\n\n----\n\n'.join(md)
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(md_string)
 
@@ -495,12 +522,12 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
             if 'messages' in dm_conversation:
                 for message in dm_conversation['messages']:
                     if 'messageCreate' in message:
-                        messageCreate = message['messageCreate']
-                        if all(tag in messageCreate for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
-                            from_id = messageCreate['senderId']
-                            to_id = messageCreate['recipientId']
-                            body = messageCreate['text']
-                            created_at = messageCreate['createdAt'] # example: 2022-01-27T15:58:52.744Z
+                        message_create = message['messageCreate']
+                        if all(tag in message_create for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
+                            from_id = message_create['senderId']
+                            to_id = message_create['recipientId']
+                            body = message_create['text']
+                            created_at = message_create['createdAt'] # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
                             from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
                             to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
@@ -560,9 +587,10 @@ def main():
     input_filenames, archive_media_folder = find_input_filenames(data_folder)
 
     # Make a folder to copy the images and videos into.
-    os.makedirs(output_media_folder_name, exist_ok = True)
+    os.makedirs(output_media_folder_name, exist_ok=True)
     if not os.path.isfile(tweet_icon_path):
-        shutil.copy('assets/images/favicon.ico', tweet_icon_path);
+        favicon_path = os.path.join(input_folder, 'assets/images/favicon.ico')
+        shutil.copy(favicon_path, tweet_icon_path)
 
     media_sources = parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
