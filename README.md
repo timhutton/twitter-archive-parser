@@ -22,7 +22,7 @@ Our script does the following:
 - Replaces t.co URLs with their original versions (the ones that can be found in the archive).
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Will query Twitter for the missing user handles (checks with you first).
-- Converts DMs to markdown. Basic functionality for now, pending improvements.
+- Converts DMs to markdown, including the handles that we retrieved. Basic functionality for now (no embedded images), pending improvements.
 - Outputs lists of followers and following.
 - Downloads the original size images (checks with you first).
 
