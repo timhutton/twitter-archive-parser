@@ -17,6 +17,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from argparse import ArgumentParser
 from collections import defaultdict
 import datetime
 import glob
@@ -87,7 +88,7 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
     return users
 
 
-def lookup_users(user_ids, users):
+def lookup_users(user_ids, users, always_get_users):
     """Fill the users dictionary with data from Twitter"""
     # Filter out any users already known
     filtered_user_ids = [id for id in user_ids if id not in users]
@@ -97,7 +98,11 @@ def lookup_users(user_ids, users):
     # Account metadata observed at ~2.1KB on average.
     estimated_size = int(2.1 * len(filtered_user_ids))
     print(f'{len(filtered_user_ids)} users are unknown.')
-    user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
+    if always_get_users:
+        print('Downloading user data from Twitter (approx {estimated_size:,}KB)...')
+        user_input = 'y'
+    else:
+        user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
     if user_input.lower() not in ('y', 'yes'):
         return
     requests = import_module('requests')
@@ -451,7 +456,7 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     return media_sources
 
 
-def parse_followings(data_folder, users, user_id_URL_template, output_following_filename):
+def parse_followings(data_folder, users, user_id_url_template, output_following_filename, offline_mode, always_get_users):
     """Parse data_folder/following.js, write to output_following_filename.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -461,19 +466,21 @@ def parse_followings(data_folder, users, user_id_URL_template, output_following_
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
             following_ids.append(follow['following']['accountId'])
-    lookup_users(following_ids, users)
+    if not offline_mode:
+        lookup_users(following_ids, users, always_get_users)
     for id in following_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
-        following.append(handle + ' ' + user_id_URL_template.format(id))
+        following.append(handle + ' ' + user_id_url_template.format(id))
     following.sort()
     with open(output_following_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(following))
     print(f"Wrote {len(following)} accounts to {output_following_filename}")
 
 
-def parse_followers(data_folder, users, user_id_URL_template, output_followers_filename):
-    """Parse data_folder/followers.js, write to output_followers_filename.
-       Query Twitter API for the missing user handles, if the user agrees.
+def parse_followers(data_folder, users, user_id_url_template, output_followers_filename, offline_mode, always_get_users):
+    """
+        Parse data_folder/followers.js, write to output_followers_filename.
+        Query Twitter API for the missing user handles, if the user agrees.
     """
     followers = []
     follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
@@ -481,19 +488,21 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
             follower_ids.append(follower['follower']['accountId'])
-    lookup_users(follower_ids, users)
+    if not offline_mode:
+        lookup_users(follower_ids, users, always_get_users)
     for id in follower_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + user_id_URL_template.format(id))
+        followers.append(handle + ' ' + user_id_url_template.format(id))
     followers.sort()
     with open(output_followers_filename, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
 
-def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename):
-    """Parse data_folder/direct-messages.js, write to output_dms_filename.
-       Query Twitter API for the missing user handles, if the user agrees.
+def parse_direct_messages(data_folder, users, user_id_url_template, output_dms_filename, offline_mode, always_get_users):
+    """
+        Parse data_folder/direct-messages.js, write to output_dms_filename.
+        Query Twitter API for the missing user handles, if the user agrees.
     """
     dms_markdown = ''
     # Scan the DMs for missing user handles
@@ -506,7 +515,8 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
             user1_id, user2_id = conversation_id.split('-')
             dm_user_ids.add(user1_id)
             dm_user_ids.add(user2_id)
-    lookup_users(list(dm_user_ids), users)
+    if not offline_mode:
+        lookup_users(list(dm_user_ids), users, always_get_users)
     # Parse the DMs
     num_written_messages = 0
     for conversation in dms_json:
@@ -514,9 +524,9 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
             dm_conversation = conversation['dmConversation']
             conversation_id = dm_conversation['conversationId']
-            user1_id,user2_id = conversation_id.split('-')
-            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL_template.format(user1_id)
-            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL_template.format(user2_id)
+            user1_id, user2_id = conversation_id.split('-')
+            user1_handle = users[user1_id].handle if user1_id in users else user_id_url_template.format(user1_id)
+            user2_handle = users[user2_id].handle if user2_id in users else user_id_url_template.format(user2_id)
             markdown += f'## Conversation between {user1_handle} and {user2_handle}: ##\n'
             messages = []
             if 'messages' in dm_conversation:
@@ -529,8 +539,8 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
                             body = message_create['text']
                             created_at = message_create['createdAt'] # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
+                            from_handle = users[from_id].handle if from_id in users else user_id_url_template.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_url_template.format(to_id)
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
             messages.sort(key=lambda tup: tup[0])
@@ -545,7 +555,38 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
 
 def main():
 
+    p = ArgumentParser(
+        description="Parse a Twitter archive and output in various ways"
+    )
+    p.add_argument("--archive-folder", dest="archive_folder", type=str, default=None,
+                   help="path to the twitter archive folder")
+    p.add_argument("--get-users", dest="get_users", action="store_true",
+                   help="download missing user info from Twitter without asking")
+    p.add_argument("--better-images", dest="better_images", action="store_true",
+                   help="download best quality version of images from Twitter without asking")
+    p.add_argument("--offline", dest="offline", action="store_true",
+                   help="offline mode: only convert local archive files, don't try to download anything from Twitter")
+    args = p.parse_args()
+
+    always_get_users: bool = args.get_users
+    always_get_better_images: bool = args.better_images
+    offline_mode: bool = args.offline
+
+    # offline mode is stronger than the other args
+    if offline_mode:
+        print("Running in offline mode. Will not try to download user data or images.")
+        always_get_users = False
+        always_get_better_images = False
+
     input_folder = '.'
+    # overwrite input folder if a valid path is given in cli args
+    if args.archive_folder:
+        if os.path.isdir(args.archive_folder):
+            input_folder = args.archive_folder
+        else:
+            print(f"{args.archive_folder} is not a valid folder path. "
+                  f"Trying to read archive from current folder instead.")
+
     output_media_folder_name = 'media/'
     tweet_icon_path = f'{output_media_folder_name}tweet.ico'
     output_html_filename = 'TweetArchive.html'
@@ -555,7 +596,7 @@ def main():
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
     output_dms_filename = 'DMs.md'
-    user_id_URL_template = 'https://twitter.com/i/user/{}'
+    user_id_url_template = 'https://twitter.com/i/user/{}'
 
     html_template = """\
 <!doctype html>
@@ -594,20 +635,30 @@ def main():
 
     media_sources = parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
-    parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
-    parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename)
+    parse_followings(data_folder, users, user_id_url_template, output_following_filename,
+                     offline_mode, always_get_users)
+    parse_followers(data_folder, users, user_id_url_template, output_followers_filename,
+                    offline_mode, always_get_users)
+    parse_direct_messages(data_folder, users, user_id_url_template, output_dms_filename,
+                          offline_mode, always_get_users)
 
-    # Download larger images, if the user agrees
-    print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
-    print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
-    print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
-    print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
-    print(f'before starting the download.')
-    user_input = input('\nOK to start downloading? [y/n]')
-    if user_input.lower() in ('y', 'yes'):
-        download_larger_media(media_sources, log_path)
-        print('In case you set your account to public before initiating the download, do not forget to protect it again.')
+    if not offline_mode:
+
+        # Download larger images, if the user agrees
+        print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
+        print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
+        print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
+        print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
+        print(f'before starting the download.')
+        if always_get_better_images:
+            user_input = 'y'
+            print('\nStarting download...')
+        else:
+            user_input = input('\nOK to start downloading? [y/n]')
+        if user_input.lower() in ('y', 'yes'):
+            download_larger_media(media_sources, log_path)
+            print('In case you set your account to public before initiating the download, '
+                  'do not forget to protect it again.')
 
 
 if __name__ == "__main__":
