@@ -30,6 +30,22 @@ Our script does the following:
 
 Some of the functionality requires the `requests` and `imagesize` modules. `parser.py` will offer to install these for you using pip. To avoid that you can install them before running the script.
 
+The parser also supports some command line arguments to tweak its behaviour, for example if you want to read from a different folder (output is always written to the folder you're running it in), automatically say "yes" to downloading user data and/or better images, or if you don't want it to make any downloads at all:
+
+```
+usage: parser.py [-h] [--archive-folder ARCHIVE_FOLDER] [--get-users] [--better-images] [--offline]
+
+Parse a Twitter archive and output in various ways
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --archive-folder ARCHIVE_FOLDER
+                        path to the twitter archive folder
+  --get-users           download missing user info from Twitter without asking
+  --better-images       download best quality version of images from Twitter without asking
+  --offline             offline mode: only convert local archive files, don't try to download anything from Twitter
+```
+
 ## TODO:
 - DM improvements ([#80](https://github.com/timhutton/twitter-archive-parser/issues/80))
 - Likes ([#22](https://github.com/timhutton/twitter-archive-parser/issues/22)), ALT-text ([#20](https://github.com/timhutton/twitter-archive-parser/issues/20))
