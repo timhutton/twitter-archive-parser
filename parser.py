@@ -17,6 +17,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from typing import Optional
 from argparse import ArgumentParser
 from collections import defaultdict
 import datetime
@@ -98,10 +99,12 @@ def lookup_users(user_ids, users, always_get_users):
     # Account metadata observed at ~2.1KB on average.
     estimated_size = int(2.1 * len(filtered_user_ids))
     print(f'{len(filtered_user_ids)} users are unknown.')
-    if always_get_users:
+    if always_get_users is True:
         print('Downloading user data from Twitter (approx {estimated_size:,}KB)...')
         user_input = 'y'
-    else:
+    elif always_get_users is False:
+        user_input = 'n'
+    else:  # if always_get_users is None
         user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
     if user_input.lower() not in ('y', 'yes'):
         return
@@ -456,7 +459,14 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     return media_sources
 
 
-def parse_followings(data_folder, users, user_id_url_template, output_following_filename, offline_mode, always_get_users):
+def parse_followings(
+        data_folder,
+        users,
+        user_id_url_template,
+        output_following_filename,
+        offline_mode,
+        always_get_users
+):
     """Parse data_folder/following.js, write to output_following_filename.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -560,16 +570,27 @@ def main():
     )
     p.add_argument("--archive-folder", dest="archive_folder", type=str, default=None,
                    help="path to the twitter archive folder")
-    p.add_argument("--get-users", dest="get_users", action="store_true",
-                   help="download missing user info from Twitter without asking")
-    p.add_argument("--better-images", dest="better_images", action="store_true",
-                   help="download best quality version of images from Twitter without asking")
+    p.add_argument("--get-users", dest="get_users", type=str, choices=['yes', 'no', 'default'], default='default',
+                   help="always/never download missing user info from Twitter. Default behaviour is asking each time.")
+    p.add_argument("--better-images", dest="better_images", type=str, choices=['yes', 'no', 'default'], default='default',
+                   help="always/never download best quality version of images from Twitter. "
+                        "Default behaviour is asking at runtime.")
     p.add_argument("--offline", dest="offline", action="store_true",
                    help="offline mode: only convert local archive files, don't try to download anything from Twitter")
     args = p.parse_args()
 
-    always_get_users: bool = args.get_users
-    always_get_better_images: bool = args.better_images
+    always_get_users: Optional[bool] = None
+    if args.get_users == 'yes':
+        always_get_users = True
+    elif args.get_users == 'no':
+        always_get_users = False
+
+    always_get_better_images: Optional[bool] = None
+    if args.better_images == 'yes':
+        always_get_better_images = True
+    elif args.better_images == 'no':
+        always_get_better_images = False
+
     offline_mode: bool = args.offline
 
     # offline mode is stronger than the other args
@@ -644,16 +665,18 @@ def main():
 
     if not offline_mode:
 
+        if always_get_better_images is False:
+            return
         # Download larger images, if the user agrees
         print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
         print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
         print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
         print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
         print(f'before starting the download.')
-        if always_get_better_images:
+        if always_get_better_images is True:
             user_input = 'y'
             print('\nStarting download...')
-        else:
+        else:  # if always_get_better_images is None
             user_input = input('\nOK to start downloading? [y/n]')
         if user_input.lower() in ('y', 'yes'):
             download_larger_media(media_sources, log_path)
