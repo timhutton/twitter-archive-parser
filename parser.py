@@ -291,7 +291,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
     print(f'{pref}Requesting headers for {url}...', end='\r')
     byte_size_before = os.path.getsize(filename)
     try:
-        with requests.get(url, stream=True) as res:
+        with requests.get(url, stream=True, timeout=2) as res:
             if not res.status_code == 200:
                 # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
                 # It is successfully tested with error responses from other domains.
