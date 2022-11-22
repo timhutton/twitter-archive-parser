@@ -171,8 +171,23 @@ def collect_tweet_id(tweet):
         tweet = tweet['tweet']
     return tweet['id_str']
 
+def add_known_tweet(known_tweets, new_tweet):
+    if 'tweet' in new_tweet.keys():
+        new_tweet = new_tweet['tweet']
+    tweet_id = new_tweet['id_str']
+    if tweet_id in known_tweets:
+        if known_tweets[tweet_id] == new_tweet:
+            pass
+            #print(f"Tweet {tweet_id} was already known with identical contents")
+        else:
+            print(f"Tweet {tweet_id} redefined with new contents, NEEDS MERGE")
+            # TODO add recursive dict merging. Try this one: https://stackoverflow.com/a/7205107/39946
+            known_tweets[tweet_id] = new_tweet
+    else:
+        #print(f"Tweet {tweet_id} is new")
+        known_tweets[tweet_id] = new_tweet
 
-def collect_tweet_references(tweet, known_tweet_ids, counts):
+def collect_tweet_references(tweet, known_tweets, counts):
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
     tweet_ids = set()
@@ -188,8 +203,8 @@ def collect_tweet_references(tweet, known_tweet_ids, counts):
                     counts['quote'] += 1
 
     # Collect previous tweets in conversation
-    if 'in_reply_to_status_id_str' in tweet:
-        if (tweet['in_reply_to_status_id_str'] in known_tweet_ids):
+    if 'in_reply_to_status_id_str' in tweet and tweet['in_reply_to_status_id_str'] is not None:
+        if (tweet['in_reply_to_status_id_str'] in known_tweets):
             counts['known_reply'] += 1
         else:
             tweet_ids.add(tweet['in_reply_to_status_id_str'])
@@ -205,6 +220,9 @@ def collect_tweet_references(tweet, known_tweet_ids, counts):
     if 'entities' in tweet and 'media' in tweet['entities']:
         tweet_ids.add(tweet['id_str'])
         counts['media'] += 1
+
+    if None in tweet_ids:
+        raise Exception(f"Tweet has id None: {tweet}")
 
     return tweet_ids
 
@@ -231,7 +249,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     header_markdown = ''
     header_html = ''
     if 'in_reply_to_status_id' in tweet:
-        # match and remove all occurences of '@username ' at the start of the body
+        # match and remove all occurrences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
             body_markdown = body_markdown[len(replying_to):]
@@ -313,7 +331,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     # extract user_id:handle connections
     if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
         id = tweet['in_reply_to_user_id']
-        if int(id) >= 0: # some ids are -1, not sure why
+        if id is not None and int(id) >= 0: # some ids are -1, not sure why
             handle = tweet['in_reply_to_screen_name']
             users[id] = UserData(id=id, handle=handle)
     if 'entities' in tweet and 'user_mentions' in tweet['entities']:
@@ -463,27 +481,36 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
        Copy the media used to output_media_folder_name.
        Collect user_id:user_handle mappings for later use, in 'users'.
        Returns the mapping from media filename to best-quality URL.
-   """
-    tweets = []
+    """
+    converted_tweets = []
     media_sources = []
     counts = defaultdict(int)
-    known_tweet_ids = set()
+    known_tweets = {}
 
-    # TODO Load tweets that we saved in an earlier run between pass 2 and 3
+    # TODO If we run this tool mutliple times, in `known_tweets` we will have our own tweets as
+    # well as related tweets by others. With each run, the tweet graph is expanded. We probably do
+    # not want this. To stop it, implement one of these:
+    # 1. keep own tweets and other tweets in different dicts
+    # 2. put them all in one dict, but mark the tweets by others, so that certain steps will ignore them
+    # 3. use the data that is already present in a tweet to distinguish own tweets from others
+
+    # Load tweets that we saved in an earlier run between pass 2 and 3
+    tweet_dict_filename = 'known_tweets.json'
+    if os.path.exists(tweet_dict_filename):
+        with open(tweet_dict_filename, 'r', encoding='utf8') as f:
+            known_tweets = json.load(f)
     
-    # First pass: collect IDs of known tweets
+    # Fist pass: Load tweets from all archive files and add them to known_tweets
     for tweets_js_filename in input_filenames:
-        json = read_json_from_js_file(tweets_js_filename)
-        print (f"Processing {len(json)} tweets in {tweets_js_filename}...")
-        for tweet in json:
-            known_tweet_ids.add(collect_tweet_id(tweet))
+        json_result = read_json_from_js_file(tweets_js_filename)
+        for tweet in json_result:
+            add_known_tweet(known_tweets, tweet)
 
-    # Second pass: collect IDs of references tweets, excluding known tweets from pass 1
     tweet_ids_to_download = set()
-    for tweets_js_filename in input_filenames:
-        json = read_json_from_js_file(tweets_js_filename)
-        for tweet in json:
-            tweet_ids_to_download.update(collect_tweet_references(tweet, known_tweet_ids, counts))
+    
+    # Second pass: Iterate through all those tweets
+    for tweet in known_tweets.values():
+        tweet_ids_to_download.update(collect_tweet_references(tweet, known_tweets, counts))
 
     # Download referenced tweets
     referenced_tweets = []
@@ -500,24 +527,27 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
             with requests.Session() as session:
                 bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
                 guest_token = get_twitter_api_guest_token(session, bearer_token)
-                referenced_tweets = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
-                # TODO Save tweets to a file, merging with contents of existing file if present
                 # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
+                downloaded_tweets = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+                for downloaded_tweet in downloaded_tweets.values():
+                    add_known_tweet(known_tweets, downloaded_tweet)
+                with open(tweet_dict_filename, "w") as outfile:
+                    json.dump(known_tweets, outfile, indent=2)
+                print(f"Saved {len(known_tweets)} tweets to '{tweet_dict_filename}'.")
+
         except Exception as err:
             print(f'Failed to download tweets: {err}')
 
     # Third pass: convert tweets, using the downloaded references from pass 2
-    for tweets_js_filename in input_filenames:
-        json = read_json_from_js_file(tweets_js_filename)
-        for tweet in json:
-            tweets.append(convert_tweet(tweet, username, archive_media_folder,
-                                        output_media_folder_name, tweet_icon_path,
-                                        media_sources, users, referenced_tweets))
-    tweets.sort(key=lambda tup: tup[0]) # oldest first
+    for tweet in known_tweets.values():
+        converted_tweets.append(convert_tweet(tweet, username, archive_media_folder,
+                                    output_media_folder_name, tweet_icon_path,
+                                    media_sources, users, referenced_tweets))
+    converted_tweets.sort(key=lambda tup: tup[0]) # oldest first
 
     # Group tweets by month (for markdown)
     grouped_tweets_markdown = defaultdict(list)
-    for timestamp, md, _ in tweets:
+    for timestamp, md, _ in converted_tweets:
         # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
         markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
@@ -530,11 +560,11 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
             f.write(md_string)
 
     # Write into html file
-    all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
+    all_html_string = '<hr>\n'.join(html for _, _, html in converted_tweets)
     with open(output_html_filename, 'w', encoding='utf-8') as f:
         f.write(html_template.format(all_html_string))
 
-    print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote {len(converted_tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
     return media_sources
 
