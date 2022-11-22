@@ -90,6 +90,34 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
             users[user["id_str"]] = user
     return users
 
+def get_tweets(session, bearer_token, guest_token, tweet_ids, include_user=True, include_alt_text=True):
+    """ Get the json metadata for a multiple tweets.
+    If include_user is False, you will only get a numerical id for the user."""
+    tweets = {}
+    remaining_tweet_ids = tweet_ids.copy()
+    while remaining_tweet_ids:
+        max_batch = 100
+        tweet_id_batch = remaining_tweet_ids[:max_batch]
+        tweet_id_list = ",".join(tweet_id_batch)
+        print(f"Download {len(tweet_id_batch)} tweets of {len(remaining_tweet_ids)} remaining...")
+        query_url = f"https://api.twitter.com/1.1/statuses/lookup.json?id={tweet_id_list}&tweet_mode=extended"
+        if not include_user:
+            query_url += "&trim_user=1"
+        if include_alt_text:
+            query_url += "&include_ext_alt_text=1"
+        response = session.get(query_url,
+                               headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token})
+        if response.status_code == 429:
+            # Rate limit exceeded - get a new token
+            guest_token = get_twitter_api_guest_token(session, bearer_token)
+            continue
+        if not response.status_code == 200:
+            raise Exception(f'Failed to get tweets: {response}')
+        response_json = json.loads(response.content)
+        for tweet in response_json:
+            tweets[tweet["id_str"]] = tweet
+        remaining_tweet_ids = remaining_tweet_ids[max_batch:]
+    return tweets
 
 def lookup_users(user_ids, users):
     """Fill the users dictionary with data from Twitter"""
@@ -138,10 +166,52 @@ def extract_username(account_js_filename):
     account = read_json_from_js_file(account_js_filename)
     return account[0]['account']['username']
 
+def collect_tweet_id(tweet):
+    if 'tweet' in tweet.keys():
+        tweet = tweet['tweet']
+    return tweet['id_str']
+
+
+def collect_tweet_references(tweet, known_tweet_ids, counts):
+    if 'tweet' in tweet.keys():
+        tweet = tweet['tweet']
+    tweet_ids = set()
+    # Collect quoted tweets
+    if 'entities' in tweet and 'urls' in tweet['entities']:
+        for url in tweet['entities']['urls']:
+            if 'url' in url and 'expanded_url' in url:
+                expanded_url = url['expanded_url']
+                matches = re.match(r'^https://twitter.com/([0-9A-Za-z_]*)/status/(\d+)$', expanded_url)
+                if (matches):
+                    #user_handle = matches[1]
+                    tweet_ids.add(matches[2])
+                    counts['quote'] += 1
+
+    # Collect previous tweets in conversation
+    if 'in_reply_to_status_id_str' in tweet:
+        if (tweet['in_reply_to_status_id_str'] in known_tweet_ids):
+            counts['known_reply'] += 1
+        else:
+            tweet_ids.add(tweet['in_reply_to_status_id_str'])
+            counts['reply'] += 1
+
+    # Collect retweets
+    if 'full_text' in tweet and tweet['full_text'].startswith('RT @'):
+        tweet_ids.add(tweet['id_str'])
+        counts['retweet'] += 1
+
+    # Collect tweets with media, which might lack alt text
+    # TODO we might filter for media which has "type" : "photo" because there is no alt text for videos
+    if 'entities' in tweet and 'media' in tweet['entities']:
+        tweet_ids.add(tweet['id_str'])
+        counts['media'] += 1
+
+    return tweet_ids
 
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
-                  tweet_icon_path, media_sources, users):
+                  tweet_icon_path, media_sources, users, referenced_tweets):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
+    # TODO actually use `referenced_tweets`
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
@@ -396,12 +466,53 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
    """
     tweets = []
     media_sources = []
+    counts = defaultdict(int)
+    known_tweet_ids = set()
+
+    # TODO Load tweets that we saved in an earlier run between pass 2 and 3
+    
+    # First pass: collect IDs of known tweets
+    for tweets_js_filename in input_filenames:
+        json = read_json_from_js_file(tweets_js_filename)
+        print (f"Processing {len(json)} tweets in {tweets_js_filename}...")
+        for tweet in json:
+            known_tweet_ids.add(collect_tweet_id(tweet))
+
+    # Second pass: collect IDs of references tweets, excluding known tweets from pass 1
+    tweet_ids_to_download = set()
+    for tweets_js_filename in input_filenames:
+        json = read_json_from_js_file(tweets_js_filename)
+        for tweet in json:
+            tweet_ids_to_download.update(collect_tweet_references(tweet, known_tweet_ids, counts))
+
+    # Download referenced tweets
+    referenced_tweets = []
+    if (len(tweet_ids_to_download) > 0):
+        print(f"Found references to {len(tweet_ids_to_download)} tweets which should be downloaded. Breakdown of download reasons:")
+        for reason in ['quote', 'reply', 'retweet', 'media']:
+            print(f" * {counts[reason]} because of {reason}")
+        print(f"There were {counts['known_reply']} references to tweets which are already known so we don't need to download them (not included in the numbers above).")
+        # TODO maybe ask the user if we should start downloading
+        # TODO maybe give an estimate of download size and/or time
+        # TODO maybe let the user choose which of the tweets to download, by selecting a subset of those reasons
+        requests = import_module('requests')
+        try:
+            with requests.Session() as session:
+                bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+                guest_token = get_twitter_api_guest_token(session, bearer_token)
+                referenced_tweets = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+                # TODO Save tweets to a file, merging with contents of existing file if present
+                # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
+        except Exception as err:
+            print(f'Failed to download tweets: {err}')
+
+    # Third pass: convert tweets, using the downloaded references from pass 2
     for tweets_js_filename in input_filenames:
         json = read_json_from_js_file(tweets_js_filename)
         for tweet in json:
             tweets.append(convert_tweet(tweet, username, archive_media_folder,
                                         output_media_folder_name, tweet_icon_path,
-                                        media_sources, users))
+                                        media_sources, users, referenced_tweets))
     tweets.sort(key=lambda tup: tup[0]) # oldest first
 
     # Group tweets by month (for markdown)
@@ -485,6 +596,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
     lookup_users(list(dm_user_ids), users)
     # Parse the DMs
     num_written_messages = 0
+    long_conversations = []
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -517,6 +629,17 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             other_user_id = user2_id if user1_handle == username else user1_id
             other_user: str = users[other_user_id].handle if other_user_id in users else other_user_id
             conversation_output_filename = dm_output_filename_template.format(other_user)
+
+            # if there are 1000 or more messages, the conversation is split up in the twitter archive.
+            # The first output file should not be overwritten, so the filename has to be adapted.
+            if len(messages) > 999 or other_user in long_conversations:
+                long_conversations.append(other_user)
+            if other_user in long_conversations:
+                part_count = 0
+                for name in long_conversations:
+                    if name == other_user:
+                        part_count += 1
+                conversation_output_filename = dm_output_filename_template.format(other_user+'_part'+str(part_count))
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
