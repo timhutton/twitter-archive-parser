@@ -29,6 +29,10 @@ Our script does the following:
 
 Some of the functionality requires the `requests` and `imagesize` modules. `parser.py` will offer to install these for you using pip. To avoid that you can install them before running the script.
 
+## Articles about handling your Twitter archive:
+- https://www.bitsgalore.org/2022/11/20/how-to-preserve-your-personal-twitter-archive
+- https://matthiasott.com/notes/converting-your-twitter-archive-to-markdown
+
 ## Related tools:
 If our script doesn't do what you want then maybe a different tool will help:
 - https://github.com/selfawaresoup/twitter-tools
