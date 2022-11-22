@@ -468,7 +468,7 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
 
-def parse_direct_messages(data_folder, username, users, user_id_URL_template):
+def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -516,7 +516,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template):
             # output as one file per conversation
             other_user_id = user2_id if user1_handle == username else user1_id
             other_user: str = users[other_user_id].handle if other_user_id in users else other_user_id
-            conversation_output_filename = f'DMs-Archive-{other_user}.md'
+            conversation_output_filename = dm_output_filename_template.format(other_user)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
@@ -537,6 +537,7 @@ def main():
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
     user_id_URL_template = 'https://twitter.com/i/user/{}'
+    dm_output_filename_template = 'DMs-Archive-{}.md'
 
     html_template = """\
 <!doctype html>
@@ -576,7 +577,7 @@ def main():
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, username, users, user_id_URL_template)
+    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
