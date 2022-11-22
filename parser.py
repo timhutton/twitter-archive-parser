@@ -485,6 +485,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
     lookup_users(list(dm_user_ids), users)
     # Parse the DMs
     num_written_messages = 0
+    long_conversations = []
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -517,6 +518,17 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             other_user_id = user2_id if user1_handle == username else user1_id
             other_user: str = users[other_user_id].handle if other_user_id in users else other_user_id
             conversation_output_filename = dm_output_filename_template.format(other_user)
+
+            # if there are 1000 or more messages, the conversation is split up in the twitter archive.
+            # The first output file should not be overwritten, so the filename has to be adapted.
+            if len(messages) > 999 or other_user in long_conversations:
+                long_conversations.append(other_user)
+            if other_user in long_conversations:
+                part_count = 0
+                for name in long_conversations:
+                    if name == other_user:
+                        part_count += 1
+                conversation_output_filename = dm_output_filename_template.format(other_user+'_part'+str(part_count))
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
