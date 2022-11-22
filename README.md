@@ -1,7 +1,7 @@
 ## How do I use it?
 1. [Download your Twitter archive](https://twitter.com/settings/download_your_data) (Settings > Your account > Download an archive of your data).
 2. Unzip to a folder.
-3. Right-click this link [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) and select "Save Link as", and save into the folder where you extracted the archive.
+3. Right-click this link --> [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) <-- and select "Save Link as", and save into the folder where you extracted the archive.
     - Or with wget: `wget https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py` 
 4. Run parser.py with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
 
@@ -22,7 +22,7 @@ Our script does the following:
 - Replaces t.co URLs with their original versions (the ones that can be found in the archive).
 - Copies used images to an output folder, to allow them to be moved to a new home.
 - Will query Twitter for the missing user handles (checks with you first).
-- Converts DMs to markdown. Basic functionality for now, pending improvements.
+- Converts DMs to markdown, including the handles that we retrieved. Basic functionality for now (no embedded images), pending improvements.
 - Outputs lists of followers and following.
 - Downloads the original size images (checks with you first).
 

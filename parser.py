@@ -61,7 +61,9 @@ def import_module(module):
 def get_twitter_api_guest_token(session, bearer_token):
     """Returns a Twitter API guest token for the current session."""
     guest_token_response = session.post("https://api.twitter.com/1.1/guest/activate.json",
-                                        headers={'authorization': f'Bearer {bearer_token}'})
+                                        headers={'authorization': f'Bearer {bearer_token}'},
+                                        timeout=2,
+                                        )
     guest_token = json.loads(guest_token_response.content)['guest_token']
     if not guest_token:
         raise Exception(f"Failed to retrieve guest token")
@@ -78,7 +80,9 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
         user_id_list = ",".join(user_id_batch)
         query_url = f"https://api.twitter.com/1.1/users/lookup.json?user_id={user_id_list}"
         response = session.get(query_url,
-                               headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token})
+                               headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token},
+                               timeout=2,
+                               )
         if not response.status_code == 200:
             raise Exception(f'Failed to get user handle: {response}')
         response_json = json.loads(response.content)
@@ -361,7 +365,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
     print(f'{pref}Requesting headers for {url}...', end='\r')
     byte_size_before = os.path.getsize(filename)
     try:
-        with requests.get(url, stream=True) as res:
+        with requests.get(url, stream=True, timeout=2) as res:
             if not res.status_code == 200:
                 # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
                 # It is successfully tested with error responses from other domains.
