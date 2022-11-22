@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
     twitter-archive-parser - Python code to parse a Twitter archive and output in various ways
-    Copyright (C) 2022  Tim Hutton
+    Copyright (C) 2022 Tim Hutton - https://github.com/timhutton/twitter-archive-parser
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
