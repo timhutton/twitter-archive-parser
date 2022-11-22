@@ -579,11 +579,10 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
 
-def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename):
-    """Parse data_folder/direct-messages.js, write to output_dms_filename.
+def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template):
+    """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
-    dms_markdown = ''
     # Scan the DMs for missing user handles
     dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
     dm_user_ids = set()
@@ -597,6 +596,7 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
     lookup_users(list(dm_user_ids), users)
     # Parse the DMs
     num_written_messages = 0
+    long_conversations = []
     for conversation in dms_json:
         markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -624,11 +624,28 @@ def parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_f
             messages.sort(key=lambda tup: tup[0])
             markdown += ''.join(md for _, md in messages)
             num_written_messages += len(messages)
-        dms_markdown += '\n\n----\n\n' + markdown
-    # output as a single file for now
-    with open(output_dms_filename, 'w', encoding='utf8') as f:
-        f.write(dms_markdown)
-    print(f"Wrote {len(dms_json)} conversations ({num_written_messages} total messages) to {output_dms_filename}")
+
+            # output as one file per conversation
+            other_user_id = user2_id if user1_handle == username else user1_id
+            other_user: str = users[other_user_id].handle if other_user_id in users else other_user_id
+            conversation_output_filename = dm_output_filename_template.format(other_user)
+
+            # if there are 1000 or more messages, the conversation is split up in the twitter archive.
+            # The first output file should not be overwritten, so the filename has to be adapted.
+            if len(messages) > 999 or other_user in long_conversations:
+                long_conversations.append(other_user)
+            if other_user in long_conversations:
+                part_count = 0
+                for name in long_conversations:
+                    if name == other_user:
+                        part_count += 1
+                conversation_output_filename = dm_output_filename_template.format(other_user+'_part'+str(part_count))
+
+            with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                f.write(markdown)
+            print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
+
+    print(f"\nWrote {len(dms_json)} direct message conversations ({num_written_messages} total messages) to markdown files")
 
 
 def main():
@@ -642,8 +659,8 @@ def main():
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
-    output_dms_filename = 'DMs.md'
     user_id_URL_template = 'https://twitter.com/i/user/{}'
+    dm_output_filename_template = 'DMs-Archive-{}.md'
 
     html_template = """\
 <!doctype html>
@@ -683,7 +700,7 @@ def main():
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, users, user_id_URL_template, output_dms_filename)
+    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")

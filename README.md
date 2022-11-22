@@ -5,7 +5,7 @@
     - Or with wget: `wget https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py` 
 4. Run parser.py with [Python3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
 
-If you are having problems, the discussion here might be useful: https://mathstodon.xyz/@timhutton/109316834651128246
+If you are having problems please check the [issues list](https://github.com/timhutton/twitter-archive-parser/issues) to see if it has happened before, and open a new issue otherwise.
 
 ## What does it do?
 The Twitter archive gives you a bunch of data and an HTML file (`Your archive.html`). Open that file to take a look! It lets you view your tweets in a nice interface. It has some flaws but maybe that's all you need. If so then stop here, you don't need our script.
@@ -29,12 +29,6 @@ Our script does the following:
 ### For advanced users:
 
 Some of the functionality requires the `requests` and `imagesize` modules. `parser.py` will offer to install these for you using pip. To avoid that you can install them before running the script.
-
-## TODO:
-- DM improvements ([#80](https://github.com/timhutton/twitter-archive-parser/issues/80))
-- Likes ([#22](https://github.com/timhutton/twitter-archive-parser/issues/22)), ALT-text ([#20](https://github.com/timhutton/twitter-archive-parser/issues/20))
-- Expand all URL shorteners ([#42](https://github.com/timhutton/twitter-archive-parser/pull/42)): bit.ly, goo.gl etc.
-- Handle reply-to-self threads ([#23](https://github.com/timhutton/twitter-archive-parser/pull/23))
 
 ## Related tools:
 If our script doesn't do what you want then maybe a different tool will help:
