@@ -468,6 +468,12 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
 
+def chunks(lst: list, n: int):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
@@ -514,8 +520,9 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             for message in messages:
                 conversations_messages[other_user_id].append(message)
 
-    # output as one file per conversation
+    # output as one file per conversation(part)
     num_written_messages = 0
+    num_written_files = 0
     for other_user_id, messages in conversations_messages.items():
         # sort messages by timestamp
         messages.sort(key=lambda tup: tup[0])
@@ -529,21 +536,18 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
         # following this standard, also split up longer conversations in the output files:
 
         if len(messages) > 1000:
-            for part_count in range(math.ceil(len(messages)/1000)):
-                markdown += f'## Conversation between {username} and {other_user_name}, part {part_count+1}: ##\n'
-                start_message_index = part_count*1000
-                end_message_index = (part_count+1)*1000 \
-                    if len(messages) > (part_count+1)*1000 \
-                    else len(messages)
-                markdown += ''.join(md for _, md in messages[start_message_index:end_message_index])
-                num_written_messages += end_message_index - start_message_index
+            for chunk_index, chunk in enumerate(chunks(messages, 1000)):
+                markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
+                markdown += ''.join(md for _, md in chunk)
+                num_written_messages += len(chunk)
                 conversation_output_filename = \
-                    dm_output_filename_template.format(other_user_short_name + '_part' + str(part_count+1))
+                    dm_output_filename_template.format(f'{other_user_short_name}_part{chunk_index+1:03}')
 
                 # write part to a markdown file
                 with open(conversation_output_filename, 'w', encoding='utf8') as f:
                     f.write(markdown)
-                print(f'Wrote {end_message_index - start_message_index} messages to {conversation_output_filename}')
+                print(f'Wrote {len(chunk)} messages to {conversation_output_filename}')
+                num_written_files += 1
 
         else:
             markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
@@ -554,8 +558,10 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
             print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
+            num_written_files += 1
 
-    print(f"\nWrote {len(dms_json)} direct message conversations ({num_written_messages} total messages) to markdown files")
+    print(f"\nWrote {len(conversations_messages)} direct message conversations "
+          f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
 
 
 def main():
