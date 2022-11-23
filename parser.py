@@ -539,7 +539,6 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
-                num_written_messages += len(chunk)
                 conversation_output_filename = \
                     dm_output_filename_template.format(f'{other_user_short_name}_part{chunk_index+1:03}')
 
@@ -552,13 +551,14 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
         else:
             markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
-            num_written_messages += len(messages)
             conversation_output_filename = dm_output_filename_template.format(other_user_short_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
             print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
             num_written_files += 1
+
+        num_written_messages += len(messages)
 
     print(f"\nWrote {len(conversations_messages)} direct message conversations "
           f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
