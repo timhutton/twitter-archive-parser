@@ -36,7 +36,7 @@ import time
 
 # Print a compile-time error in Python < 3.6. This line does nothing in Python 3.6+ but is reported to the user
 # as an error (because it is the first line that fails to compile) in older versions.
-f' Error: This script requires Python 3.6 or later.'
+f' Error: This script requires Python 3.6 or later. Use `python --version` to check your version.'
 
 
 class UserData:
