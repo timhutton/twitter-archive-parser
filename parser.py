@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 # hot-loaded if needed, see import_module():
 #  imagesize
 #  requests
@@ -70,6 +71,8 @@ def get_twitter_api_guest_token(session, bearer_token):
     return guest_token
 
 
+# TODO if downloading fails within the for loop, we should be able to return the already 
+# fetched users, but also make it clear that it is incomplete. Maybe do it like in get_tweets.
 def get_twitter_users(session, bearer_token, guest_token, user_ids):
     """Asks Twitter for all metadata associated with user_ids."""
     users = {}
@@ -92,32 +95,44 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
 
 def get_tweets(session, bearer_token, guest_token, tweet_ids, include_user=True, include_alt_text=True):
     """ Get the json metadata for a multiple tweets.
-    If include_user is False, you will only get a numerical id for the user."""
+    If include_user is False, you will only get a numerical id for the user.
+    Returns `tweets, remaining_tweet_ids` where `tweets`. If all goes well, `tweets` will contain all
+    tweets, and `remaining_tweet_ids` is empty. If something goes wrong, downloading is stopped
+    and only the tweets we got until then are returned. 
+    TODO In some cases, up to 100 tweets may be both in `tweets` and `remaining_tweet_ids`."""
     tweets = {}
     remaining_tweet_ids = tweet_ids.copy()
-    while remaining_tweet_ids:
-        max_batch = 100
-        tweet_id_batch = remaining_tweet_ids[:max_batch]
-        tweet_id_list = ",".join(tweet_id_batch)
-        print(f"Download {len(tweet_id_batch)} tweets of {len(remaining_tweet_ids)} remaining...")
-        query_url = f"https://api.twitter.com/1.1/statuses/lookup.json?id={tweet_id_list}&tweet_mode=extended"
-        if not include_user:
-            query_url += "&trim_user=1"
-        if include_alt_text:
-            query_url += "&include_ext_alt_text=1"
-        response = session.get(query_url,
-                               headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token})
-        if response.status_code == 429:
-            # Rate limit exceeded - get a new token
-            guest_token = get_twitter_api_guest_token(session, bearer_token)
-            continue
-        if not response.status_code == 200:
-            raise Exception(f'Failed to get tweets: {response}')
-        response_json = json.loads(response.content)
-        for tweet in response_json:
-            tweets[tweet["id_str"]] = tweet
-        remaining_tweet_ids = remaining_tweet_ids[max_batch:]
-    return tweets
+    try:
+        while remaining_tweet_ids:
+            max_batch = 100
+            tweet_id_batch = remaining_tweet_ids[:max_batch]
+            tweet_id_list = ",".join(map(str,tweet_id_batch))
+            print(f"Download {len(tweet_id_batch)} tweets of {len(remaining_tweet_ids)} remaining...")
+            query_url = f"https://api.twitter.com/1.1/statuses/lookup.json?id={tweet_id_list}&tweet_mode=extended"
+            if not include_user:
+                query_url += "&trim_user=1"
+            if include_alt_text:
+                query_url += "&include_ext_alt_text=1"
+            response = session.get(query_url,
+                                headers={'authorization': f'Bearer {bearer_token}', 'x-guest-token': guest_token}, timeout=5)
+            if response.status_code == 429:
+                # Rate limit exceeded - get a new token
+                guest_token = get_twitter_api_guest_token(session, bearer_token)
+                continue
+            if not response.status_code == 200:
+                raise Exception(f'Failed to get tweets: {response}')
+            response_json = json.loads(response.content)
+            for tweet in response_json:
+                if "id_str" in tweet:
+                    tweets[tweet["id_str"]] = tweet
+                else:
+                    print (f"Tweet could not be returned because it has no id: {tweet}")
+            remaining_tweet_ids = remaining_tweet_ids[max_batch:]
+    except Exception as err:
+        traceback.print_exc()
+        print(f"Exception during batch download of tweets: {err}");
+        print(f"Try to work with the tweets we got so far.");
+    return tweets, remaining_tweet_ids
 
 def lookup_users(user_ids, users):
     """Fill the users dictionary with data from Twitter"""
@@ -171,54 +186,117 @@ def collect_tweet_id(tweet):
         tweet = tweet['tweet']
     return tweet['id_str']
 
+# returns an it if you give it either an int or a str that can be parsed as 
+# an int. Otherwise, returns None.
+def parse_as_number(str_or_number):
+    if isinstance(str_or_number, str):
+        if str_or_number.isnumeric():
+            return int(str_or_number)
+        else:
+            return None
+    elif isinstance(str_or_number, int):
+        return str_or_number
+    else:
+        return None
+    
+
+# Taken from https://stackoverflow.com/a/7205107/39946, then adapted to
+# some commonly observed twitter specifics.
+def merge(a, b, path=None):
+    "merges b into a"
+    if path is None: path = []
+    for key in b:
+        if key in a:
+            if isinstance(a[key], dict) and isinstance(b[key], dict):
+                merge(a[key], b[key], path + [str(key)])
+            elif a[key] == b[key]:
+                pass # same leaf value
+            elif key == 'retweet_count' or key == 'favorite_count':
+                a[key] = max(parse_as_number(a[key]), parse_as_number(b[key]))
+            elif key in ['possibly_sensitive']:
+                # ignore conflicts in unimportant fields that tend to differ
+                pass
+            elif parse_as_number(a[key]) == parse_as_number(b[key]):
+                # Twitter sometimes puts numbers into strings, so that the same number might be 3 or '3'
+                a[key] = parse_as_number(a[key])
+            elif a[key] is None and b[key] is not None:
+                # just as if `not key in a`
+                a[key] = b[key]
+            elif a[key] is not None and b[key] is None:
+                # Nothing to update
+                pass
+            else:
+                raise Exception(f"Conflict at {'.'.join(path + [str(key)])}, value '{a[key]}' vs. '{b[key]}'")
+        else:
+            a[key] = b[key]
+    return a
+
+def unwrap_tweet(tweet):
+    if 'tweet' in tweet.keys():
+        return tweet['tweet']
+    else:
+        return tweet
+
 def add_known_tweet(known_tweets, new_tweet):
-    if 'tweet' in new_tweet.keys():
-        new_tweet = new_tweet['tweet']
     tweet_id = new_tweet['id_str']
     if tweet_id in known_tweets:
         if known_tweets[tweet_id] == new_tweet:
             pass
             #print(f"Tweet {tweet_id} was already known with identical contents")
         else:
-            print(f"Tweet {tweet_id} redefined with new contents, NEEDS MERGE")
-            # TODO add recursive dict merging. Try this one: https://stackoverflow.com/a/7205107/39946
-            known_tweets[tweet_id] = new_tweet
+            try:
+                merge(known_tweets[tweet_id], new_tweet)
+            except Exception as err:
+                print(f"Tweet {tweet_id} could not be merged: {err}")
+                
     else:
         #print(f"Tweet {tweet_id} is new")
         known_tweets[tweet_id] = new_tweet
 
 def collect_tweet_references(tweet, known_tweets, counts):
-    if 'tweet' in tweet.keys():
-        tweet = tweet['tweet']
+    tweet = unwrap_tweet(tweet)
     tweet_ids = set()
+
     # Collect quoted tweets
-    if 'entities' in tweet and 'urls' in tweet['entities']:
+    if has_path(tweet, ['entities', 'urls']):
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
                 expanded_url = url['expanded_url']
                 matches = re.match(r'^https://twitter.com/([0-9A-Za-z_]*)/status/(\d+)$', expanded_url)
                 if (matches):
                     #user_handle = matches[1]
-                    tweet_ids.add(matches[2])
-                    counts['quote'] += 1
+                    quoted_id = matches[2]
+                    if (quoted_id in known_tweets):
+                        counts['known_quote'] += 1
+                    else:
+                        tweet_ids.add(quoted_id)
+                        print(f"Need to download tweet {tweet['id_str']} because of being quoted")
+                        counts['quote'] += 1
 
     # Collect previous tweets in conversation
-    if 'in_reply_to_status_id_str' in tweet and tweet['in_reply_to_status_id_str'] is not None:
-        if (tweet['in_reply_to_status_id_str'] in known_tweets):
+    # Only do this for tweets from our original archive
+    if 'from_archive' in tweet and has_path(tweet, ['in_reply_to_status_id_str']):
+        prev_tweet_id = parse_as_number(tweet['in_reply_to_status_id_str'])
+        if (prev_tweet_id in known_tweets):
             counts['known_reply'] += 1
         else:
-            tweet_ids.add(tweet['in_reply_to_status_id_str'])
+            tweet_ids.add(prev_tweet_id)
+            print(f"Need to download tweet {prev_tweet_id} because of reply to it")
             counts['reply'] += 1
 
     # Collect retweets
-    if 'full_text' in tweet and tweet['full_text'].startswith('RT @'):
+    # Don't do this if we already re-downloaded this tweet
+    if not 'from_api' in tweet and 'full_text' in tweet and tweet['full_text'].startswith('RT @'):
         tweet_ids.add(tweet['id_str'])
+        print(f"Need to download tweet {tweet['id_str']} because of retweet")
         counts['retweet'] += 1
 
     # Collect tweets with media, which might lack alt text
     # TODO we might filter for media which has "type" : "photo" because there is no alt text for videos
-    if 'entities' in tweet and 'media' in tweet['entities']:
+    # Don't do this if we already re-downloaded this tweet with alt texts enabled
+    if not 'download_with_alt_text' in tweet and has_path(tweet, ['entities', 'media']):
         tweet_ids.add(tweet['id_str'])
+        print(f"Need to download tweet {tweet['id_str']} because of contained media")
         counts['media'] += 1
 
     if None in tweet_ids:
@@ -226,19 +304,28 @@ def collect_tweet_references(tweet, known_tweets, counts):
 
     return tweet_ids
 
+# Walks a path through nested dicts or lists, and returns True if all the keys are present, and all of the values are not None
+def has_path(dict, index_path):
+    for index in index_path:
+        if not index in dict:
+            return False
+        dict = dict[index]
+        if dict is None:
+            return False
+    return True
+
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
                   tweet_icon_path, media_sources, users, referenced_tweets):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     # TODO actually use `referenced_tweets`
-    if 'tweet' in tweet.keys():
-        tweet = tweet['tweet']
+    tweet = unwrap_tweet(tweet)
     timestamp_str = tweet['created_at']
     timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
     body_markdown = tweet['full_text']
     body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
     # replace t.co URLs with their original versions
-    if 'entities' in tweet and 'urls' in tweet['entities']:
+    if has_path(tweet, ['entities', 'urls']):
         for url in tweet['entities']['urls']:
             if 'url' in url and 'expanded_url' in url:
                 expanded_url = url['expanded_url']
@@ -248,7 +335,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
     header_markdown = ''
     header_html = ''
-    if 'in_reply_to_status_id' in tweet:
+    if has_path(tweet, ['in_reply_to_status_id']):
         # match and remove all occurrences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
@@ -267,7 +354,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
         header_markdown += f'Replying to [{name_list}]({replying_to_url})\n\n'
         header_html += f'Replying to <a href="{replying_to_url}">{name_list}</a><br>'
     # replace image URLs with image links to local files
-    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+    if has_path(tweet, ['entities', 'media', 0, 'url']) and has_path(tweet, ['extended_entities', 'media']):
         original_url = tweet['entities']['media'][0]['url']
         markdown = ''
         html = ''
@@ -334,7 +421,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
         if id is not None and int(id) >= 0: # some ids are -1, not sure why
             handle = tweet['in_reply_to_screen_name']
             users[id] = UserData(id=id, handle=handle)
-    if 'entities' in tweet and 'user_mentions' in tweet['entities']:
+    if 'entities' in tweet and 'user_mentions' in tweet['entities'] and tweet['entities']['user_mentions'] is not None:
         for mention in tweet['entities']['user_mentions']:
             id = mention['id']
             if int(id) >= 0: # some ids are -1, not sure why
@@ -487,7 +574,7 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     counts = defaultdict(int)
     known_tweets = {}
 
-    # TODO If we run this tool mutliple times, in `known_tweets` we will have our own tweets as
+    # TODO If we run this tool multiple times, in `known_tweets` we will have our own tweets as
     # well as related tweets by others. With each run, the tweet graph is expanded. We probably do
     # not want this. To stop it, implement one of these:
     # 1. keep own tweets and other tweets in different dicts
@@ -504,6 +591,8 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     for tweets_js_filename in input_filenames:
         json_result = read_json_from_js_file(tweets_js_filename)
         for tweet in json_result:
+            tweet = unwrap_tweet(tweet)
+            tweet['from_archive'] = True
             add_known_tweet(known_tweets, tweet)
 
     tweet_ids_to_download = set()
@@ -528,8 +617,13 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
                 bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
                 guest_token = get_twitter_api_guest_token(session, bearer_token)
                 # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
-                downloaded_tweets = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+                downloaded_tweets, remaining_tweet_ids = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+                # TODO maybe react if remaining_tweet_ids contains tweets
                 for downloaded_tweet in downloaded_tweets.values():
+                    downloaded_tweet = unwrap_tweet(downloaded_tweet)
+                    downloaded_tweet['from_api'] = True
+                    downloaded_tweet['download_with_user'] = False
+                    downloaded_tweet['download_with_alt_text'] = True
                     add_known_tweet(known_tweets, downloaded_tweet)
                 with open(tweet_dict_filename, "w") as outfile:
                     json.dump(known_tweets, outfile, indent=2)
@@ -540,9 +634,12 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
 
     # Third pass: convert tweets, using the downloaded references from pass 2
     for tweet in known_tweets.values():
-        converted_tweets.append(convert_tweet(tweet, username, archive_media_folder,
-                                    output_media_folder_name, tweet_icon_path,
-                                    media_sources, users, referenced_tweets))
+        try:
+            converted_tweets.append(convert_tweet(tweet, username, archive_media_folder,
+                                        output_media_folder_name, tweet_icon_path,
+                                        media_sources, users, referenced_tweets))
+        except Exception as err:
+            print(f"Could not convert tweet {tweet['id_str']} because: {err}")
     converted_tweets.sort(key=lambda tup: tup[0]) # oldest first
 
     # Group tweets by month (for markdown)
