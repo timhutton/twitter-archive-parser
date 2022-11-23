@@ -133,14 +133,14 @@ def read_json_from_js_file(filename):
         return json.loads(data)
 
 
-def extract_username(account_js_filename):
+def extract_username(file_path_account_js):
     """Returns the user's Twitter username from account.js."""
-    account = read_json_from_js_file(account_js_filename)
+    account = read_json_from_js_file(file_path_account_js)
     return account[0]['account']['username']
 
 
-def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
-                  tweet_icon_path, media_sources, users):
+def convert_tweet(tweet, username, archive_media_folder, dir_path_output_media,
+                  file_path_tweet_icon, media_sources, users):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
@@ -189,7 +189,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                 original_filename = os.path.split(original_expanded_url)[1]
                 archive_media_filename = tweet_id_str + '-' + original_filename
                 archive_media_path = os.path.join(archive_media_folder, archive_media_filename)
-                new_url = output_media_folder_name + archive_media_filename
+                new_url = dir_path_output_media + archive_media_filename
                 markdown += '' if not markdown and body_markdown == original_url else '\n\n'
                 html += '' if not html and body_html == original_url else '<br>'
                 if os.path.isfile(archive_media_path):
@@ -200,14 +200,14 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                     html += f'<img src="{new_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                    media_sources.append((os.path.join(dir_path_output_media, archive_media_filename), best_quality_url))
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
                     if len(archive_media_paths) > 0:
                         for archive_media_path in archive_media_paths:
                             archive_media_filename = os.path.split(archive_media_path)[-1]
-                            media_url = f'{output_media_folder_name}{archive_media_filename}'
+                            media_url = f'{dir_path_output_media}{archive_media_filename}'
                             if not os.path.isfile(media_url):
                                 shutil.copy(archive_media_path, media_url)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
@@ -226,7 +226,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                                     print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                                    media_sources.append((os.path.join(dir_path_output_media, archive_media_filename), best_quality_url))
                     else:
                         print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
@@ -238,8 +238,8 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     body_html = '<p><blockquote>' + '<br>\n'.join(body_html.splitlines()) + '</blockquote>'
     # append the original Twitter URL as a link
     original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
-    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{tweet_icon_path}" width="12" /> [{timestamp_str}]({original_tweet_url})'
-    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{tweet_icon_path}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{file_path_tweet_icon}" width="12" /> [{timestamp_str}]({original_tweet_url})'
+    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{file_path_tweet_icon}" width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
     if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
         id = tweet['in_reply_to_user_id']
@@ -256,24 +256,24 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     return timestamp, body_markdown, body_html
 
 
-def find_input_filenames(data_folder):
+def find_input_filenames(dir_path_input_data):
     """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
     tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
     input_filenames = []
     for tweet_js_filename_template in tweet_js_filename_templates:
-        input_filenames += glob.glob(os.path.join(data_folder, tweet_js_filename_template))
+        input_filenames += glob.glob(os.path.join(dir_path_input_data, tweet_js_filename_template))
     if len(input_filenames)==0:
-        print(f'Error: no files matching {tweet_js_filename_templates} in {data_folder}')
+        print(f'Error: no files matching {tweet_js_filename_templates} in {dir_path_input_data}')
         exit()
     tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
     tweet_media_folder_names = []
     for tweet_media_folder_name_template in tweet_media_folder_name_templates:
-        tweet_media_folder_names += glob.glob(os.path.join(data_folder, tweet_media_folder_name_template))
+        tweet_media_folder_names += glob.glob(os.path.join(dir_path_input_data, tweet_media_folder_name_template))
     if len(tweet_media_folder_names) == 0:
-        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {dir_path_input_data}')
         exit()
     if len(tweet_media_folder_names) > 1:
-        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {data_folder}')
+        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {dir_path_input_data}')
         exit()
     archive_media_folder = tweet_media_folder_names[0]
     return input_filenames, archive_media_folder
@@ -346,14 +346,14 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
-def download_larger_media(media_sources, log_path):
+def download_larger_media(media_sources, file_path_download_log):
     """Uses (filename, URL) tuples in media_sources to download files from remote storage.
        Aborts downloads if the remote file is the same size or smaller than the existing local version.
        Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
     """
     # Log to file as well as the console
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
-    logfile_handler = logging.FileHandler(filename=log_path, mode='w')
+    logfile_handler = logging.FileHandler(filename=file_path_download_log, mode='w')
     logfile_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(logfile_handler)
     # Download new versions
@@ -384,13 +384,13 @@ def download_larger_media(media_sources, log_path):
 
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
-    print(f'Wrote log to {log_path}')
+    print(f'Wrote log to {file_path_download_log}')
 
 
 def parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
-                 output_media_folder_name, tweet_icon_path, output_html_filename):
-    """Read tweets from input_filenames, write to *.md and output_html_filename.
-       Copy the media used to output_media_folder_name.
+                 dir_path_output_media, file_path_tweet_icon, file_path_output_html):
+    """Read tweets from input_filenames, write to *.md and file_path_output_html.
+       Copy the media used to dir_path_output_media.
        Collect user_id:user_handle mappings for later use, in 'users'.
        Returns the mapping from media filename to best-quality URL.
    """
@@ -400,7 +400,7 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
         json = read_json_from_js_file(tweets_js_filename)
         for tweet in json:
             tweets.append(convert_tweet(tweet, username, archive_media_folder,
-                                        output_media_folder_name, tweet_icon_path,
+                                        dir_path_output_media, file_path_tweet_icon,
                                         media_sources, users))
     tweets.sort(key=lambda tup: tup[0]) # oldest first
 
@@ -420,20 +420,20 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
 
     # Write into html file
     all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
-    with open(output_html_filename, 'w', encoding='utf-8') as f:
+    with open(file_path_output_html, 'w', encoding='utf-8') as f:
         f.write(html_template.format(all_html_string))
 
-    print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+    print(f'Wrote {len(tweets)} tweets to *.md and {file_path_output_html}, with images and video embedded from {dir_path_output_media}')
 
     return media_sources
 
 
-def parse_followings(data_folder, users, user_id_URL_template, output_following_filename):
-    """Parse data_folder/following.js, write to output_following_filename.
+def parse_followings(dir_path_input_data, users, URL_template_user_id, file_path_output_following):
+    """Parse dir_path_input_data/following.js, write to file_path_output_following.
        Query Twitter API for the missing user handles, if the user agrees.
     """
     following = []
-    following_json = read_json_from_js_file(os.path.join(data_folder, 'following.js'))
+    following_json = read_json_from_js_file(os.path.join(dir_path_input_data, 'following.js'))
     following_ids = []
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
@@ -441,19 +441,19 @@ def parse_followings(data_folder, users, user_id_URL_template, output_following_
     lookup_users(following_ids, users)
     for id in following_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
-        following.append(handle + ' ' + user_id_URL_template.format(id))
+        following.append(handle + ' ' + URL_template_user_id.format(id))
     following.sort()
-    with open(output_following_filename, 'w', encoding='utf8') as f:
+    with open(file_path_output_following, 'w', encoding='utf8') as f:
         f.write('\n'.join(following))
-    print(f"Wrote {len(following)} accounts to {output_following_filename}")
+    print(f"Wrote {len(following)} accounts to {file_path_output_following}")
 
 
-def parse_followers(data_folder, users, user_id_URL_template, output_followers_filename):
-    """Parse data_folder/followers.js, write to output_followers_filename.
+def parse_followers(dir_path_input_data, users, URL_template_user_id, file_path_output_followers):
+    """Parse dir_path_input_data/followers.js, write to file_path_output_followers.
        Query Twitter API for the missing user handles, if the user agrees.
     """
     followers = []
-    follower_json = read_json_from_js_file(os.path.join(data_folder, 'follower.js'))
+    follower_json = read_json_from_js_file(os.path.join(dir_path_input_data, 'follower.js'))
     follower_ids = []
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
@@ -461,11 +461,11 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     lookup_users(follower_ids, users)
     for id in follower_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + user_id_URL_template.format(id))
+        followers.append(handle + ' ' + URL_template_user_id.format(id))
     followers.sort()
-    with open(output_followers_filename, 'w', encoding='utf8') as f:
+    with open(file_path_output_followers, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
-    print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
+    print(f"Wrote {len(followers)} accounts to {file_path_output_followers}")
 
 
 def chunks(lst: list, n: int):
@@ -474,12 +474,12 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template):
-    """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
+def parse_direct_messages(dir_path_input_data, username, users, URL_template_user_id, file_path_template_dm_output):
+    """Parse dir_path_input_data/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
     # Scan the DMs for missing user handles
-    dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages.js'))
+    dms_json = read_json_from_js_file(os.path.join(dir_path_input_data, 'direct-messages.js'))
     dm_user_ids = set()
     for conversation in dms_json:
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -516,8 +516,8 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
                             from_handle = users[from_id].handle if from_id in users \
-                                else user_id_url_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_url_template.format(to_id)
+                                else URL_template_user_id.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else URL_template_user_id.format(to_id)
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
                                                f'({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
@@ -536,7 +536,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
         messages.sort(key=lambda tup: tup[0])
 
         other_user_name = \
-            users[other_user_id].handle if other_user_id in users else user_id_url_template.format(other_user_id)
+            users[other_user_id].handle if other_user_id in users else URL_template_user_id.format(other_user_id)
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
@@ -548,7 +548,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
                 markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
                 conversation_output_filename = \
-                    dm_output_filename_template.format(f'{other_user_short_name}_part{chunk_index+1:03}')
+                    file_path_template_dm_output.format(f'{other_user_short_name}_part{chunk_index+1:03}')
 
                 # write part to a markdown file
                 with open(conversation_output_filename, 'w', encoding='utf8') as f:
@@ -560,7 +560,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
             markdown = ''
             markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
-            conversation_output_filename = dm_output_filename_template.format(other_user_short_name)
+            conversation_output_filename = file_path_template_dm_output.format(other_user_short_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
@@ -574,18 +574,20 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
 
 
 def main():
-
-    input_folder = '.'
-    output_media_folder_name = 'media/'
-    tweet_icon_path = f'{output_media_folder_name}tweet.ico'
-    output_html_filename = 'TweetArchive.html'
-    data_folder = os.path.join(input_folder, 'data')
-    account_js_filename = os.path.join(data_folder, 'account.js')
-    log_path = os.path.join(output_media_folder_name, 'download_log.txt')
-    output_following_filename = 'following.txt'
-    output_followers_filename = 'followers.txt'
-    user_id_URL_template = 'https://twitter.com/i/user/{}'
-    dm_output_filename_template = 'DMs-Archive-{}.md'
+    # path config
+    dir_path_archive             = '.'                                                              # used to be `input_folder`
+    dir_path_output_media        = os.path.join(dir_path_archive,       'media')                    # used to be `output_media_folder_name`
+    dir_path_input_data          = os.path.join(dir_path_archive,       'data')                     # used to be `data_folder`
+    file_path_output_html        = os.path.join(dir_path_archive,       'TweetArchive.html')        # used to be `output_html_filename`
+    file_path_output_following   = os.path.join(dir_path_archive,       'following.txt')            # used to be `output_following_filename`
+    file_path_output_followers   = os.path.join(dir_path_archive,       'followers.txt')            # used to be `output_followers_filename`
+    file_path_template_dm_output = os.path.join(dir_path_archive,       'DMs-Archive-{}.md')        # used to be `dm_output_filename_template`
+    file_path_account_js         = os.path.join(dir_path_input_data,    'account.js')               # used to be `account_js_filename`
+    file_path_download_log       = os.path.join(dir_path_output_media,  'download_log.txt')         # used to be `log_path`
+    file_path_tweet_icon         = os.path.join(dir_path_output_media,  'tweet.ico')                # used to be `tweet_icon_path`
+    
+    # URL config
+    URL_template_user_id = 'https://twitter.com/i/user/{}' # used to be `URL_template_user_id`
 
     html_template = """\
 <!doctype html>
@@ -608,24 +610,24 @@ def main():
     users = {}
 
     # Extract the username from data/account.js
-    if not os.path.isfile(account_js_filename):
-        print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
+    if not os.path.isfile(file_path_account_js):
+        print(f'Error: Failed to load {file_path_account_js}. Start this script in the root folder of your Twitter archive.')
         exit()
-    username = extract_username(account_js_filename)
+    username = extract_username(file_path_account_js)
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems.
-    input_filenames, archive_media_folder = find_input_filenames(data_folder)
+    input_filenames, archive_media_folder = find_input_filenames(dir_path_input_data)
 
     # Make a folder to copy the images and videos into.
-    os.makedirs(output_media_folder_name, exist_ok = True)
-    if not os.path.isfile(tweet_icon_path):
-        shutil.copy('assets/images/favicon.ico', tweet_icon_path);
+    os.makedirs(dir_path_output_media, exist_ok = True)
+    if not os.path.isfile(file_path_tweet_icon):
+        shutil.copy('assets/images/favicon.ico', file_path_tweet_icon);
 
     media_sources = parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
-                                 output_media_folder_name, tweet_icon_path, output_html_filename)
-    parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
-    parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
+                                 dir_path_output_media, file_path_tweet_icon, file_path_output_html)
+    parse_followings(dir_path_input_data, users, URL_template_user_id, file_path_output_following)
+    parse_followers(dir_path_input_data, users, URL_template_user_id, file_path_output_followers)
+    parse_direct_messages(dir_path_input_data, username, users, URL_template_user_id, file_path_template_dm_output)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
@@ -635,7 +637,7 @@ def main():
     print(f'before starting the download.')
     user_input = input('\nOK to start downloading? [y/n]')
     if user_input.lower() in ('y', 'yes'):
-        download_larger_media(media_sources, log_path)
+        download_larger_media(media_sources, file_path_download_log)
         print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
 
