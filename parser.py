@@ -474,7 +474,7 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template):
+def parse_direct_messages(data_folder, output_media_folder_name, username, users, user_id_url_template, dm_output_filename_template):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -507,11 +507,49 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
                             to_id = message_create['recipientId']
                             body = message_create['text']
                             # replace t.co URLs with their original versions
-                            if 'urls' in message_create:
+                            if 'urls' in message_create and len(message_create['urls']) > 0:
                                 for url in message_create['urls']:
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # replace image URLs with image links to local files
+                            if 'mediaUrls' in message_create \
+                                    and len(message_create['mediaUrls']) == 1 \
+                                    and 'urls' in message_create:
+                                original_expanded_url = message_create['urls'][0]['expanded']
+                                message_id = message_create['id']
+                                media_hash_and_type = message_create['mediaUrls'][0].split('/')[-1]
+                                archive_media_filename = f'{message_id}-{media_hash_and_type}'
+                                new_url = output_media_folder_name + archive_media_filename
+                                archive_media_path = \
+                                    os.path.join(data_folder, 'direct_messages_media', archive_media_filename)
+                                if os.path.isfile(archive_media_path):
+                                    # found a matching image, use this one
+                                    if not os.path.isfile(new_url):
+                                        shutil.copy(archive_media_path, new_url)
+                                    image_markdown = f'\n![]({new_url})\n'
+                                    body = body.replace(original_expanded_url, image_markdown)
+
+                                    # TODO: Save the online location of the best-quality version of this file,
+                                    #  for later upgrading if wanted (see convert_tweet method, but probably
+                                    #  with a different url scheme)
+                                else:
+                                    archive_media_paths = glob.glob(
+                                        os.path.join(data_folder, 'direct_messages_media', message_id + '*'))
+                                    if len(archive_media_paths) > 0:
+                                        for archive_media_path in archive_media_paths:
+                                            archive_media_filename = os.path.split(archive_media_path)[-1]
+                                            media_url = f'{output_media_folder_name}{archive_media_filename}'
+                                            if not os.path.isfile(media_url):
+                                                shutil.copy(archive_media_path, media_url)
+                                            video_markdown = f'\n<video controls><source src="{media_url}">' \
+                                                             f'Your browser does not support the video tag.</video>\n'
+                                            body = body.replace(original_expanded_url, video_markdown)
+                                    # TODO: save the online location of the best-quality version (see above)
+                                    else:
+                                        print(f'Warning: missing local file: {archive_media_path}. '
+                                              f'Using original link instead: {original_expanded_url})')
+
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
@@ -625,7 +663,7 @@ def main():
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
+    parse_direct_messages(data_folder, output_media_folder_name, username, users, user_id_URL_template, dm_output_filename_template)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
