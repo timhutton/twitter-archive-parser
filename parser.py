@@ -531,9 +531,10 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users \
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_url_template.format(to_id)
+                            to_handle = users[to_id].handle.replace('_', '\\_') if to_id in users \
+                                else user_id_url_template.format(to_id)
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
                                                f'({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
@@ -551,9 +552,11 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
         # sort messages by timestamp
         messages.sort(key=lambda tup: tup[0])
 
-        other_user_name = \
-            users[other_user_id].handle if other_user_id in users else user_id_url_template.format(other_user_id)
+        other_user_name = users[other_user_id].handle.replace('_', '\\_') if other_user_id in users \
+            else user_id_url_template.format(other_user_id)
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
+
+        escaped_username = username.replace('_', '\\_')
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
         # following this standard, also split up longer conversations in the output files:
@@ -561,7 +564,8 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
+                markdown += f'## Conversation between {escaped_username} and {other_user_name}, ' \
+                            f'part {chunk_index+1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
                 conversation_output_filename = \
                     dm_output_filename_template.format(f'{other_user_short_name}_part{chunk_index+1:03}')
@@ -574,7 +578,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
 
         else:
             markdown = ''
-            markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
+            markdown += f'## Conversation between {escaped_username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
             conversation_output_filename = dm_output_filename_template.format(other_user_short_name)
 
