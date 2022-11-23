@@ -404,26 +404,36 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
                                         media_sources, users))
     tweets.sort(key=lambda tup: tup[0]) # oldest first
 
-    # Group tweets by month (for markdown)
-    grouped_tweets_markdown = defaultdict(list)
-    for timestamp, md, _ in tweets:
-        # Use a markdown filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
+    # Group tweets by month
+    grouped_tweets = defaultdict(list)
+    for timestamp, md, html in tweets:
+        # Use a (markdown) filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
-        markdown_filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}.md' # change to group by day or year or timestamp
-        grouped_tweets_markdown[markdown_filename].append(md)
+        filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}' # change to group by day or year or timestamp
+        grouped_tweets[filename].append((md, html))
 
-    # Write into *.md files
-    for filename, md in grouped_tweets_markdown.items():
-        md_string =  '\n\n----\n\n'.join(md)
-        with open(filename, 'w', encoding='utf-8') as f:
+    user_input = input(f'Group the html output by month? [y/n]')
+    split_html = user_input.lower() in ('y', 'yes')
+
+    for filename, content in grouped_tweets.items():
+        # Write into *.md files
+        md_string =  '\n\n----\n\n'.join(el[0] for el in content)
+        with open(f'{filename}.md', 'w', encoding='utf-8') as f:
             f.write(md_string)
 
-    # Write into html file
-    all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
-    with open(output_html_filename, 'w', encoding='utf-8') as f:
-        f.write(html_template.format(all_html_string))
+        if split_html:
+            # Write into *.html files
+            html_string = '<hr>\n'.join(el[1] for el in content)
+            with open(f'{filename}.html', 'w', encoding='utf-8') as f:
+                f.write(html_template.format(html_string))
 
-    print(f'Wrote {len(tweets)} tweets to *.md and {output_html_filename}, with images and video embedded from {output_media_folder_name}')
+    if not split_html:
+        # Write into html file
+        all_html_string = '<hr>\n'.join(html for _, _, html in tweets)
+        with open(output_html_filename, 'w', encoding='utf-8') as f:
+            f.write(html_template.format(all_html_string))
+
+    print(f'Wrote {len(tweets)} tweets to *.md and {"*.html" if split_html else output_html_filename}, with images and video embedded from {output_media_folder_name}')
 
     return media_sources
 
