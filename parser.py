@@ -474,7 +474,7 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template):
+def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -489,8 +489,8 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             dm_user_ids.add(user1_id)
             dm_user_ids.add(user2_id)
     lookup_users(list(dm_user_ids), users)
-    # Parse the DMs and store the messages in a dict
 
+    # Parse the DMs and store the messages in a dict
     conversations_messages = defaultdict(list)
     for conversation in dms_json:
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
@@ -507,10 +507,13 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
                             to_id = message_create['recipientId']
                             body = message_create['text']
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
-                            timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
-                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
+                            timestamp = \
+                                int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
+                            from_handle = users[from_id].handle if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_url_template.format(to_id)
+                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
+                                               f'({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
 
             # find identifier for the conversation
@@ -520,7 +523,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             for message in messages:
                 conversations_messages[other_user_id].append(message)
 
-    # output as one file per conversation(part)
+    # output as one file per conversation (or part of long conversation)
     num_written_messages = 0
     num_written_files = 0
     for other_user_id, messages in conversations_messages.items():
@@ -529,7 +532,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
         markdown = ''
 
         other_user_name = \
-            users[other_user_id].handle if other_user_id in users else user_id_URL_template.format(other_user_id)
+            users[other_user_id].handle if other_user_id in users else user_id_url_template.format(other_user_id)
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
