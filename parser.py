@@ -520,8 +520,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
             other_user_id = user2_id if (user1_id in users and users[user1_id].handle == username) else user1_id
 
             # collect messages per identifying user in conversations_messages dict
-            for message in messages:
-                conversations_messages[other_user_id].append(message)
+            conversations_messages[other_user_id].extend(messages)
 
     # output as one file per conversation (or part of long conversation)
     num_written_messages = 0
