@@ -293,30 +293,30 @@ def convert_tweet(tweet, username, paths, media_sources, users):
     return timestamp, body_markdown, body_html
 
 
-def find_files_paths_input_tweets(dir_path_input_data):
+def find_files_input_tweets(dir_path_input_data):
     """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
-    tweet_js_filename_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
+    input_tweets_file_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
     files_paths_input_tweets = []
-    for tweet_js_filename_template in tweet_js_filename_templates:
-        files_paths_input_tweets += glob.glob(os.path.join(dir_path_input_data, tweet_js_filename_template))
+    for input_tweets_file_template in input_tweets_file_templates:
+        files_paths_input_tweets += glob.glob(os.path.join(dir_path_input_data, input_tweets_file_template))
     if len(files_paths_input_tweets)==0:
-        print(f'Error: no files matching {tweet_js_filename_templates} in {dir_path_input_data}')
+        print(f'Error: no files matching {input_tweets_file_templates} in {dir_path_input_data}')
         exit()
     return files_paths_input_tweets
 
 
-def find_dir_path_input_media(dir_path_input_data):
-    tweet_media_folder_name_templates = ['tweet_media', 'tweets_media']
-    tweet_media_folder_names = []
-    for tweet_media_folder_name_template in tweet_media_folder_name_templates:
-        tweet_media_folder_names += glob.glob(os.path.join(dir_path_input_data, tweet_media_folder_name_template))
-    if len(tweet_media_folder_names) == 0:
-        print(f'Error: no folders matching {tweet_media_folder_name_templates} in {dir_path_input_data}')
+def find_dir_input_media(dir_path_input_data):
+    input_media_dir_templates = ['tweet_media', 'tweets_media']
+    input_media_dirs = []
+    for input_media_dir_template in input_media_dir_templates:
+        input_media_dirs += glob.glob(os.path.join(dir_path_input_data, input_media_dir_template))
+    if len(input_media_dirs) == 0:
+        print(f'Error: no folders matching {input_media_dir_templates} in {dir_path_input_data}')
         exit()
-    if len(tweet_media_folder_names) > 1:
-        print(f'Error: multiple folders matching {tweet_media_folder_name_templates} in {dir_path_input_data}')
+    if len(input_media_dirs) > 1:
+        print(f'Error: multiple folders matching {input_media_dir_templates} in {dir_path_input_data}')
         exit()
-    return tweet_media_folder_names[0]
+    return input_media_dirs[0]
 
 
 def download_file_if_larger(url, filename, index, count, sleep_time):
@@ -613,7 +613,7 @@ def parse_direct_messages(paths, username, users, URL_template_user_id):
 def init_paths():
     dir_archive             = '.'                                                         # used to be `input_folder`
     dir_input_data          = os.path.join(dir_archive,       'data')                     # used to be `data_folder`
-    dir_input_media         = find_dir_path_input_media(dir_input_data)                   # used to be `archive_media_folder`
+    dir_input_media         = find_dir_input_media(dir_input_data)                   # used to be `archive_media_folder`
     dir_output_media        = os.path.join(dir_archive,       'media')                    # used to be `output_media_folder_name`
     file_output_html        = os.path.join(dir_archive,       'TweetArchive.html')        # used to be `output_html_filename`
     file_output_following   = os.path.join(dir_archive,       'following.txt')            # used to be `output_following_filename`
@@ -622,7 +622,7 @@ def init_paths():
     file_account_js         = os.path.join(dir_input_data,    'account.js')               # used to be `account_js_filename`
     file_download_log       = os.path.join(dir_output_media,  'download_log.txt')         # used to be `log_path`
     file_tweet_icon         = os.path.join(dir_output_media,  'tweet.ico')                # used to be `tweet_icon_path`
-    files_input_tweets      = find_files_paths_input_tweets(dir_input_data)               # used to be `input_filenames`
+    files_input_tweets      = find_files_input_tweets(dir_input_data)               # used to be `input_filenames`
 
     # Identify the file and folder names - they change slightly depending on the archive size it seems.
     
