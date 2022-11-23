@@ -485,7 +485,7 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
     lookup_users(list(dm_user_ids), users)
     # Parse the DMs and store the messages in a dict
 
-    conversations_messages = {}
+    conversations_messages = defaultdict(list)
     for conversation in dms_json:
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
             dm_conversation = conversation['dmConversation']
@@ -511,8 +511,6 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             other_user_id = user2_id if (user1_id in users and users[user1_id].handle == username) else user1_id
 
             # collect messages per identifying user in conversations_messages dict
-            if other_user_id not in conversations_messages.keys():
-                conversations_messages[other_user_id] = []
             for message in messages:
                 conversations_messages[other_user_id].append(message)
 
