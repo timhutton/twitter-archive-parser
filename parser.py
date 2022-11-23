@@ -162,7 +162,7 @@ def extract_username(paths):
     return account[0]['account']['username']
 
 
-def convert_tweet(tweet, username, paths, media_sources, users):
+def convert_tweet(tweet, username, media_sources, users, paths):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
@@ -438,7 +438,7 @@ def parse_tweets(username, users, html_template, paths):
     for tweets_js_filename in paths.files_input_tweets:
         json = read_json_from_js_file(tweets_js_filename)
         for tweet in json:
-            tweets.append(convert_tweet(tweet, username, paths, media_sources, users))
+            tweets.append(convert_tweet(tweet, username, media_sources, users, paths))
     tweets.sort(key=lambda tup: tup[0]) # oldest first
 
     # Group tweets by month (for markdown)
@@ -465,7 +465,7 @@ def parse_tweets(username, users, html_template, paths):
     return media_sources
 
 
-def parse_followings(paths, users, URL_template_user_id):
+def parse_followings(users, URL_template_user_id, paths):
     """Parse paths.dir_input_data/following.js, write to paths.file_output_following.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -485,7 +485,7 @@ def parse_followings(paths, users, URL_template_user_id):
     print(f"Wrote {len(following)} accounts to {paths.file_output_following}")
 
 
-def parse_followers(paths, users, URL_template_user_id):
+def parse_followers(users, URL_template_user_id, paths):
     """Parse paths.dir_input_data/followers.js, write to paths.file_output_followers.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -511,7 +511,7 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(paths, username, users, URL_template_user_id):
+def parse_direct_messages(username, users, URL_template_user_id, paths):
     """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -613,7 +613,7 @@ def parse_direct_messages(paths, username, users, URL_template_user_id):
 def init_paths():
     dir_archive             = '.'                                                         # used to be `input_folder`
     dir_input_data          = os.path.join(dir_archive,       'data')                     # used to be `data_folder`
-    dir_input_media         = find_dir_input_media(dir_input_data)                   # used to be `archive_media_folder`
+    dir_input_media         = find_dir_input_media(dir_input_data)                        # used to be `archive_media_folder`
     dir_output_media        = os.path.join(dir_archive,       'media')                    # used to be `output_media_folder_name`
     file_output_html        = os.path.join(dir_archive,       'TweetArchive.html')        # used to be `output_html_filename`
     file_output_following   = os.path.join(dir_archive,       'following.txt')            # used to be `output_following_filename`
@@ -622,10 +622,8 @@ def init_paths():
     file_account_js         = os.path.join(dir_input_data,    'account.js')               # used to be `account_js_filename`
     file_download_log       = os.path.join(dir_output_media,  'download_log.txt')         # used to be `log_path`
     file_tweet_icon         = os.path.join(dir_output_media,  'tweet.ico')                # used to be `tweet_icon_path`
-    files_input_tweets      = find_files_input_tweets(dir_input_data)               # used to be `input_filenames`
+    files_input_tweets      = find_files_input_tweets(dir_input_data)                     # used to be `input_filenames`
 
-    # Identify the file and folder names - they change slightly depending on the archive size it seems.
-    
     return PathConfig(
         dir_archive                = dir_archive,
         dir_input_data             = dir_input_data,
@@ -680,9 +678,9 @@ def main():
         shutil.copy('assets/images/favicon.ico', paths.file_tweet_icon);
 
     media_sources = parse_tweets(username, users, html_template, paths)
-    parse_followings(paths, users, URL_template_user_id)
-    parse_followers(paths, users, URL_template_user_id)
-    parse_direct_messages(paths, username, users, URL_template_user_id)
+    parse_followings(users, URL_template_user_id, paths)
+    parse_followers(users, URL_template_user_id, paths)
+    parse_direct_messages(username, users, URL_template_user_id, paths)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
