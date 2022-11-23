@@ -155,7 +155,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
     if 'entities' in tweet and 'media' not in tweet['entities'] and len(tweet['entities'].get("urls", [])) == 0:
         for word in tweet['full_text'].split():
             url = urlparse(word)
-            if url.scheme != '' and url.netloc != '':
+            if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
                 # Shorten links similiar to twitter
                 netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
                 path_short = url.path if len(url.path + '?' + url.query) < 15 else (url.path + '?' + url.query)[:15] + '\u2026'
