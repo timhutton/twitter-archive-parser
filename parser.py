@@ -71,9 +71,10 @@ def get_twitter_api_guest_token(session, bearer_token):
     return guest_token
 
 
-def get_twitter_users(session, bearer_token, guest_token, user_ids):
+def get_twitter_users(session, bearer_token, guest_token, user_ids, state):
     """Asks Twitter for all metadata associated with user_ids."""
     users = {}
+    [user_ids.remove(id) for id in user_ids if id in state]
     while user_ids:
         max_batch = 100
         user_id_batch = user_ids[:max_batch]
@@ -89,10 +90,11 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
         response_json = json.loads(response.content)
         for user in response_json:
             users[user["id_str"]] = user
-    return users
+        state.update(users)
+    return state
 
 
-def lookup_users(user_ids, users):
+def lookup_users(user_ids, users, state):
     """Fill the users dictionary with data from Twitter"""
     # Filter out any users already known
     filtered_user_ids = [id for id in user_ids if id not in users]
@@ -110,7 +112,7 @@ def lookup_users(user_ids, users):
         with requests.Session() as session:
             bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
             guest_token = get_twitter_api_guest_token(session, bearer_token)
-            retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
+            retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids, state)
             for user_id, user in retrieved_users.items():
                 users[user_id] = UserData(user_id, user["screen_name"])
     except Exception as err:
@@ -362,7 +364,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
-def download_larger_media(media_sources, log_path, state_path):
+def download_larger_media(media_sources, log_path, state):
     """Uses (filename, URL) tuples in media_sources to download files from remote storage.
        Aborts downloads if the remote file is the same size or smaller than the existing local version.
        Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
@@ -377,12 +379,6 @@ def download_larger_media(media_sources, log_path, state_path):
     total_bytes_downloaded = 0
     sleep_time = 0.25
     remaining_tries = 5
-    # State store
-    try:
-        with open(state_path, 'r') as state_file:
-            state = json.load(state_file)
-    except (IOError, json.decoder.JSONDecodeError):
-        state = {}
     while remaining_tries > 0:
         number_of_files = len(media_sources)
         success_count = 0
@@ -413,8 +409,6 @@ def download_larger_media(media_sources, log_path, state_path):
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
     logging.info(f'Time taken: {end_time-start_time:.0f}s')
     print(f'Wrote log to {log_path}')
-    with open(state_path, 'w') as state_file:
-        json.dump(state, state_file, sort_keys=True, indent=4)
 
 
 def parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
@@ -458,7 +452,7 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     return media_sources
 
 
-def parse_followings(data_folder, users, user_id_URL_template, output_following_filename):
+def parse_followings(data_folder, users, user_id_URL_template, output_following_filename, state):
     """Parse data_folder/following.js, write to output_following_filename.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -468,7 +462,7 @@ def parse_followings(data_folder, users, user_id_URL_template, output_following_
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
             following_ids.append(follow['following']['accountId'])
-    lookup_users(following_ids, users)
+    lookup_users(following_ids, users, state)
     for id in following_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
         following.append(handle + ' ' + user_id_URL_template.format(id))
@@ -478,7 +472,7 @@ def parse_followings(data_folder, users, user_id_URL_template, output_following_
     print(f"Wrote {len(following)} accounts to {output_following_filename}")
 
 
-def parse_followers(data_folder, users, user_id_URL_template, output_followers_filename):
+def parse_followers(data_folder, users, user_id_URL_template, output_followers_filename, state):
     """Parse data_folder/followers.js, write to output_followers_filename.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -488,7 +482,7 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
             follower_ids.append(follower['follower']['accountId'])
-    lookup_users(follower_ids, users)
+    lookup_users(follower_ids, users, state)
     for id in follower_ids:
         handle = users[id].handle if id in users else '~unknown~handle~'
         followers.append(handle + ' ' + user_id_URL_template.format(id))
@@ -504,7 +498,7 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template):
+def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template, state):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -518,7 +512,7 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
             user1_id, user2_id = conversation_id.split('-')
             dm_user_ids.add(user1_id)
             dm_user_ids.add(user2_id)
-    lookup_users(list(dm_user_ids), users)
+    lookup_users(list(dm_user_ids), users, state)
 
     # Parse the DMs and store the messages in a dict
     conversations_messages = defaultdict(list)
@@ -612,7 +606,7 @@ def main():
     data_folder = os.path.join(input_folder, 'data')
     account_js_filename = os.path.join(data_folder, 'account.js')
     log_path = os.path.join(output_media_folder_name, 'download_log.txt')
-    state_path = os.path.join(output_media_folder_name, 'media_state.json')
+    state_path = 'download_state.json'
     output_following_filename = 'following.txt'
     output_followers_filename = 'followers.txt'
     user_id_URL_template = 'https://twitter.com/i/user/{}'
@@ -638,6 +632,13 @@ def main():
 
     users = {}
 
+    # Use our state store to prevent duplicate downloads
+    try:
+        with open(state_path, 'r') as state_file:
+            state = json.load(state_file)
+    except (IOError, json.decoder.JSONDecodeError):
+        state = {"media": {}, "users": {}}
+
     # Extract the username from data/account.js
     if not os.path.isfile(account_js_filename):
         print(f'Error: Failed to load {account_js_filename}. Start this script in the root folder of your Twitter archive.')
@@ -654,9 +655,9 @@ def main():
 
     media_sources = parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
                                  output_media_folder_name, tweet_icon_path, output_html_filename)
-    parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
-    parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
-    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
+    parse_followings(data_folder, users, user_id_URL_template, output_following_filename, state["users"])
+    parse_followers(data_folder, users, user_id_URL_template, output_followers_filename, state["users"])
+    parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template, state["users"])
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
@@ -666,9 +667,11 @@ def main():
     print(f'before starting the download.')
     user_input = input('\nOK to start downloading? [y/N]')
     if user_input.lower() in ('y', 'yes'):
-        download_larger_media(media_sources, log_path, state_path)
+        download_larger_media(media_sources, log_path, state["media"])
         print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
+    with open(state_path, 'w') as state_file:
+        json.dump(state, state_file, sort_keys=True, indent=4)
 
 if __name__ == "__main__":
     main()
