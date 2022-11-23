@@ -506,6 +506,12 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
                             from_id = message_create['senderId']
                             to_id = message_create['recipientId']
                             body = message_create['text']
+                            # replace t.co URLs with their original versions
+                            if 'urls' in message_create:
+                                for url in message_create['urls']:
+                                    if 'url' in url and 'expanded' in url:
+                                        expanded_url = url['expanded']
+                                        body = body.replace(url['url'], expanded_url)
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
