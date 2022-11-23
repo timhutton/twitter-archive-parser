@@ -603,7 +603,7 @@ def main():
     file_path_tweet_icon         = os.path.join(dir_path_output_media,  'tweet.ico')                # used to be `tweet_icon_path`
     
     # URL config
-    URL_template_user_id = 'https://twitter.com/i/user/{}' # used to be `URL_template_user_id`
+    URL_template_user_id = 'https://twitter.com/i/user/{}' # used to be `user_id_URL_template`
 
     html_template = """\
 <!doctype html>
