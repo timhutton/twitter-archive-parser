@@ -468,7 +468,13 @@ def parse_followers(data_folder, users, user_id_URL_template, output_followers_f
     print(f"Wrote {len(followers)} accounts to {output_followers_filename}")
 
 
-def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template):
+def chunks(lst: list, n: int):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def parse_direct_messages(data_folder, username, users, user_id_url_template, dm_output_filename_template):
     """Parse data_folder/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -483,58 +489,81 @@ def parse_direct_messages(data_folder, username, users, user_id_URL_template, dm
             dm_user_ids.add(user1_id)
             dm_user_ids.add(user2_id)
     lookup_users(list(dm_user_ids), users)
-    # Parse the DMs
-    num_written_messages = 0
-    long_conversations = []
+
+    # Parse the DMs and store the messages in a dict
+    conversations_messages = defaultdict(list)
     for conversation in dms_json:
-        markdown = ''
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
             dm_conversation = conversation['dmConversation']
             conversation_id = dm_conversation['conversationId']
-            user1_id,user2_id = conversation_id.split('-')
-            user1_handle = users[user1_id].handle if user1_id in users else user_id_URL_template.format(user1_id)
-            user2_handle = users[user2_id].handle if user2_id in users else user_id_URL_template.format(user2_id)
-            markdown += f'## Conversation between {user1_handle} and {user2_handle}: ##\n'
+            user1_id, user2_id = conversation_id.split('-')
             messages = []
             if 'messages' in dm_conversation:
                 for message in dm_conversation['messages']:
                     if 'messageCreate' in message:
-                        messageCreate = message['messageCreate']
-                        if all(tag in messageCreate for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
-                            from_id = messageCreate['senderId']
-                            to_id = messageCreate['recipientId']
-                            body = messageCreate['text']
-                            created_at = messageCreate['createdAt'] # example: 2022-01-27T15:58:52.744Z
-                            timestamp = int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users else user_id_URL_template.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else user_id_URL_template.format(to_id)
-                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ({created_at}) ###\n```\n{body}\n```'
+                        message_create = message['messageCreate']
+                        if all(tag in message_create for tag in ['senderId', 'recipientId', 'text', 'createdAt']):
+                            from_id = message_create['senderId']
+                            to_id = message_create['recipientId']
+                            body = message_create['text']
+                            created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = \
+                                int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
+                            from_handle = users[from_id].handle if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            to_handle = users[to_id].handle if to_id in users else user_id_url_template.format(to_id)
+                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
+                                               f'({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
-            messages.sort(key=lambda tup: tup[0])
+
+            # find identifier for the conversation
+            other_user_id = user2_id if (user1_id in users and users[user1_id].handle == username) else user1_id
+
+            # collect messages per identifying user in conversations_messages dict
+            conversations_messages[other_user_id].extend(messages)
+
+    # output as one file per conversation (or part of long conversation)
+    num_written_messages = 0
+    num_written_files = 0
+    for other_user_id, messages in conversations_messages.items():
+        # sort messages by timestamp
+        messages.sort(key=lambda tup: tup[0])
+        markdown = ''
+
+        other_user_name = \
+            users[other_user_id].handle if other_user_id in users else user_id_url_template.format(other_user_id)
+        other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
+
+        # if there are more than 1000 messages, the conversation was split up in the twitter archive.
+        # following this standard, also split up longer conversations in the output files:
+
+        if len(messages) > 1000:
+            for chunk_index, chunk in enumerate(chunks(messages, 1000)):
+                markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
+                markdown += ''.join(md for _, md in chunk)
+                conversation_output_filename = \
+                    dm_output_filename_template.format(f'{other_user_short_name}_part{chunk_index+1:03}')
+
+                # write part to a markdown file
+                with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                    f.write(markdown)
+                print(f'Wrote {len(chunk)} messages to {conversation_output_filename}')
+                num_written_files += 1
+
+        else:
+            markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
-            num_written_messages += len(messages)
-
-            # output as one file per conversation
-            other_user_id = user2_id if user1_handle == username else user1_id
-            other_user: str = users[other_user_id].handle if other_user_id in users else other_user_id
-            conversation_output_filename = dm_output_filename_template.format(other_user)
-
-            # if there are 1000 or more messages, the conversation is split up in the twitter archive.
-            # The first output file should not be overwritten, so the filename has to be adapted.
-            if len(messages) > 999 or other_user in long_conversations:
-                long_conversations.append(other_user)
-            if other_user in long_conversations:
-                part_count = 0
-                for name in long_conversations:
-                    if name == other_user:
-                        part_count += 1
-                conversation_output_filename = dm_output_filename_template.format(other_user+'_part'+str(part_count))
+            conversation_output_filename = dm_output_filename_template.format(other_user_short_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
             print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
+            num_written_files += 1
 
-    print(f"\nWrote {len(dms_json)} direct message conversations ({num_written_messages} total messages) to markdown files")
+        num_written_messages += len(messages)
+
+    print(f"\nWrote {len(conversations_messages)} direct message conversations "
+          f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
 
 
 def main():
