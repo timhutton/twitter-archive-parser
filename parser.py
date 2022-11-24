@@ -33,13 +33,12 @@ import time
 # hot-loaded if needed, see import_module():
 #  imagesize
 #  requests
+#  dataclasses (must be installed for python 3.6, is bundled since 3.7)
 
 
 # Print a compile-time error in Python < 3.6. This line does nothing in Python 3.6+ but is reported to the user
 # as an error (because it is the first line that fails to compile) in older versions.
 f' Error: This script requires Python 3.6 or later. Use `python --version` to check your version.'
-# To do it more explicitly:
-assert sys.version_info >= (3, 6)
 
 class UserData:
     def __init__(self, id, handle = None):
@@ -61,7 +60,7 @@ def import_module(module):
         return importlib.import_module(module)
 
 
-import_module('dataclasses') # must be installed for python 3.6, is bundled since 3.7
+import_module('dataclasses')
 from dataclasses import dataclass
 
 
