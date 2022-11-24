@@ -40,11 +40,11 @@ import time
 # as an error (because it is the first line that fails to compile) in older versions.
 f' Error: This script requires Python 3.6 or later. Use `python --version` to check your version.'
 
+
 class UserData:
     def __init__(self, id, handle = None):
         self.id = id
         self.handle = handle
-
 
 
 def import_module(module):
@@ -70,7 +70,6 @@ class PathConfig:
     dir_input_data: str
     dir_input_media: str
     dir_output_media: str
-    file_output_html: str
     file_output_following: str
     file_output_followers: str
     file_template_dm_output: str
@@ -610,25 +609,23 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
 
 
 def init_paths():
-    dir_archive             = '.'                                                         # used to be `input_folder`
-    dir_input_data          = os.path.join(dir_archive,       'data')                     # used to be `data_folder`
-    dir_input_media         = find_dir_input_media(dir_input_data)                        # used to be `archive_media_folder`
-    dir_output_media        = os.path.join(dir_archive,       'media')                    # used to be `output_media_folder_name`
-    file_output_html        = os.path.join(dir_archive,       'TweetArchive.html')        # used to be `output_html_filename`
-    file_output_following   = os.path.join(dir_archive,       'following.txt')            # used to be `output_following_filename`
-    file_output_followers   = os.path.join(dir_archive,       'followers.txt')            # used to be `output_followers_filename`
-    file_template_dm_output = os.path.join(dir_archive,       'DMs-Archive-{}.md')        # used to be `dm_output_filename_template`
-    file_account_js         = os.path.join(dir_input_data,    'account.js')               # used to be `account_js_filename`
-    file_download_log       = os.path.join(dir_output_media,  'download_log.txt')         # used to be `log_path`
-    file_tweet_icon         = os.path.join(dir_output_media,  'tweet.ico')                # used to be `tweet_icon_path`
-    files_input_tweets      = find_files_input_tweets(dir_input_data)                     # used to be `input_filenames`
+    dir_archive             = '.'
+    dir_input_data          = os.path.join(dir_archive,       'data')
+    dir_input_media         = find_dir_input_media(dir_input_data)
+    dir_output_media        = os.path.join(dir_archive,       'media')
+    file_output_following   = os.path.join(dir_archive,       'following.txt')
+    file_output_followers   = os.path.join(dir_archive,       'followers.txt')
+    file_template_dm_output = os.path.join(dir_archive,       'DMs-Archive-{}.md')
+    file_account_js         = os.path.join(dir_input_data,    'account.js')
+    file_download_log       = os.path.join(dir_output_media,  'download_log.txt')
+    file_tweet_icon         = os.path.join(dir_output_media,  'tweet.ico')
+    files_input_tweets      = find_files_input_tweets(dir_input_data)
 
     return PathConfig(
         dir_archive                = dir_archive,
         dir_input_data             = dir_input_data,
         dir_input_media            = dir_input_media,
         dir_output_media           = dir_output_media,
-        file_output_html           = file_output_html,
         file_output_following      = file_output_following,
         file_output_followers      = file_output_followers,
         file_template_dm_output    = file_template_dm_output,
@@ -649,7 +646,7 @@ def main():
     username = extract_username(paths)
 
     # URL config
-    URL_template_user_id = 'https://twitter.com/i/user/{}' # used to be `user_id_URL_template`
+    URL_template_user_id = 'https://twitter.com/i/user/{}'
 
     html_template = """\
 <!doctype html>
