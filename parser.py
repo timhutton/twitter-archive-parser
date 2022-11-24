@@ -210,6 +210,10 @@ def merge(a, b, path=None):
         if key in a:
             if isinstance(a[key], dict) and isinstance(b[key], dict):
                 merge(a[key], b[key], path + [str(key)])
+            elif isinstance(a[key], list) and isinstance(b[key], list):
+                for item_b in b[key]:
+                    if item_b not in a[key]:
+                        a[key].append(item_b)
             elif a[key] == b[key]:
                 pass # same leaf value
             elif key == 'retweet_count' or key == 'favorite_count':
