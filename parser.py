@@ -589,6 +589,252 @@ def parse_direct_messages(data_folder, username, users, user_id_url_template, dm
           f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
 
 
+def make_conversation_name_safe_for_filename(conversation_name: str) -> str:
+    """
+    Remove/replace characters that could be unsafe in filenames
+    """
+    forbidden_chars = \
+        ['"', "'", '*', '/', '\\', ':', '<', '>', '?', '|', '!', '@', ';', ',', '=', '.', '\n', '\r', '\t']
+    new_conversation_name = ''
+    for char in conversation_name:
+        if char in forbidden_chars:
+            new_conversation_name = new_conversation_name + '_'
+        elif char.isspace():
+            # replace spaces with underscores
+            new_conversation_name = new_conversation_name + '_'
+        elif char == 0x7F or (0x1F >= ord(char) >= 0x00):
+            # 0x00 - 0x1F and 0x7F are also forbidden, just discard them
+            continue
+        else:
+            new_conversation_name = new_conversation_name + char
+
+    return new_conversation_name
+
+
+def find_group_direct_message_participants(conversation: dict) -> set:
+    """
+    Find IDs of all participating Users in a group direct message
+    """
+    group_user_ids = set()
+    if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+        dm_conversation = conversation['dmConversation']
+        if 'messages' in dm_conversation:
+            for message in dm_conversation['messages']:
+                if 'messageCreate' in message:
+                    group_user_ids.add(message['messageCreate']['senderId'])
+                elif 'joinConversation' in message:
+                    group_user_ids.add(message['joinConversation']['initiatingUserId'])
+                    for participant_id in message['joinConversation']['participantsSnapshot']:
+                        group_user_ids.add(participant_id)
+    return group_user_ids
+
+
+def parse_group_direct_messages(data_folder, username, users, user_id_url_template, group_dm_output_filename_template):
+    """Parse data_folder/direct-messages-group.js, write to one markdown file per conversation.
+       Query Twitter API for the missing user handles, if the user agrees.
+    """
+    # Scan the group DMs for missing user handles
+    group_dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages-group.js'))
+    dm_user_ids = set()
+    for conversation in group_dms_json:
+        participants = find_group_direct_message_participants(conversation)
+        for participant_id in participants:
+            dm_user_ids.add(participant_id)
+    lookup_users(list(dm_user_ids), users)
+
+    # Parse the group DMs, store messages and metadata in a dict
+    conversations_messages = defaultdict(list)
+    conversations_metadata = defaultdict(dict)
+    for conversation in group_dms_json:
+        if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
+            dm_conversation = conversation['dmConversation']
+            conversation_id = dm_conversation['conversationId']
+            participants = find_group_direct_message_participants(conversation)
+            participant_names = []
+            for participant_id in participants:
+                if participant_id in users:
+                    participant_names.append(users[participant_id].handle)
+                else:
+                    participant_names.append(user_id_url_template.format(participant_id))
+
+            # save names in metadata
+            conversations_metadata[conversation_id]['participants'] = participants
+            conversations_metadata[conversation_id]['participant_names'] = participant_names
+            conversations_metadata[conversation_id]['conversation_names'] = [(0, conversation_id)]
+            messages = []
+            if 'messages' in dm_conversation:
+                for message in dm_conversation['messages']:
+                    if 'messageCreate' in message:
+                        message_create = message['messageCreate']
+                        if all(tag in message_create for tag in ['senderId', 'text', 'createdAt']):
+                            from_id = message_create['senderId']
+                            body = message_create['text']
+                            # replace t.co URLs with their original versions
+                            if 'urls' in message_create:
+                                for url in message_create['urls']:
+                                    if 'url' in url and 'expanded' in url:
+                                        expanded_url = url['expanded']
+                                        body = body.replace(url['url'], expanded_url)
+                            # TODO: image links
+                            created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(
+                                datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
+                            ))
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n```\n{body}\n```'
+                            messages.append((timestamp, message_markdown))
+                    elif "conversationNameUpdate" in message:
+                        conversation_name_update = message['conversationNameUpdate']
+                        if all(tag in conversation_name_update for tag in ['initiatingUserId', 'name', 'createdAt']):
+                            from_id = conversation_name_update['initiatingUserId']
+                            body = f"_changed group name to: {conversation_name_update['name']}_"
+                            created_at = conversation_name_update['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(
+                                datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
+                            ))
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            messages.append((timestamp, message_markdown))
+                            # save metadata about name change:
+                            conversations_metadata[conversation_id]['conversation_names'].append(
+                                (timestamp, conversation_name_update['name'])
+                            )
+                    elif "joinConversation" in message:
+                        join_conversation = message['joinConversation']
+                        if all(tag in join_conversation for tag in ['initiatingUserId', 'createdAt']):
+                            from_id = join_conversation['initiatingUserId']
+                            created_at = join_conversation['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(
+                                datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
+                            ))
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            escaped_username = username.replace('_', '\\_')
+                            body = f'_{from_handle} added {escaped_username} to the group_'
+                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            messages.append((timestamp, message_markdown))
+                    elif "participantsJoin" in message:
+                        participants_join = message['participantsJoin']
+                        if all(tag in participants_join for tag in ['initiatingUserId', 'userIds', 'createdAt']):
+                            from_id = participants_join['initiatingUserId']
+                            created_at = participants_join['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(
+                                datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
+                            ))
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            joined_ids = participants_join['userIds']
+                            joined_handles = [users[joined_id].handle.replace('_', '\\_') if joined_id in users
+                                              else user_id_url_template.format(joined_id) for joined_id in joined_ids]
+                            name_list = ', '.join(joined_handles[:-1]) + \
+                                        (f' and {joined_handles[-1]}' if len(joined_handles) > 1 else
+                                         joined_handles[0])
+                            body = f'_{from_handle} added {name_list} to the group_'
+                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            messages.append((timestamp, message_markdown))
+                    elif "participantsLeave" in message:
+                        participants_leave = message['participantsLeave']
+                        if all(tag in participants_leave for tag in ['userIds', 'createdAt']):
+                            created_at = participants_leave['createdAt']  # example: 2022-01-27T15:58:52.744Z
+                            timestamp = int(round(
+                                datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
+                            ))
+                            left_ids = participants_leave['userIds']
+                            left_handles = [users[left_id].handle.replace('_', '\\_') if left_id in users
+                                            else user_id_url_template.format(left_id) for left_id in left_ids]
+                            name_list = ', '.join(left_handles[:-1]) + \
+                                        (f' and {left_handles[-1]}' if len(left_handles) > 1 else
+                                         left_handles[0])
+                            body = f'_{name_list} left the group_'
+                            message_markdown = f'\n\n### {name_list}: ({created_at}) ###\n\n{body}\n'
+                            messages.append((timestamp, message_markdown))
+
+            # collect messages per conversation in conversations_messages dict
+            conversations_messages[conversation_id].extend(messages)
+
+    # output as one file per conversation (or part of long conversation)
+    num_written_messages = 0
+    num_written_files = 0
+    for conversation_id, messages in conversations_messages.items():
+        # sort messages by timestamp
+        messages.sort(key=lambda tup: tup[0])
+        # create conversation name for use in filename:
+        # first, try to find an official name in the parsed conversation data
+        conversations_metadata[conversation_id]['conversation_names'].sort(key=lambda tup: tup[0], reverse=True)
+        official_name = conversations_metadata[conversation_id]['conversation_names'][0][1]
+        safe_group_name = make_conversation_name_safe_for_filename(official_name)
+        if len(safe_group_name) < 2:
+            # discard name if it's too short (because of collision risk)
+            group_name = conversation_id
+        else:
+            group_name = safe_group_name
+
+        if group_name == conversation_id:
+            # try to make a nice list of participant handles for the conversation name
+            handles = []
+            for participant_id in conversations_metadata[conversation_id]['participants']:
+                if participant_id in users:
+                    participant_handle = users[participant_id].handle
+                    if participant_handle != username:
+                        handles.append(participant_handle)
+            if len(handles) == 1:
+                group_name = \
+                    f'{handles[0]}_and_{len(conversations_metadata[conversation_id]["participants"]) - 1}_more'
+            elif len(handles) == 2 and len(conversations_metadata[conversation_id]["participants"]) == 3:
+                group_name = f'{handles[0]}_and_{handles[1]}_and_{username}'
+            elif len(handles) >= 2:
+                group_name = \
+                    f'{handles[0]}_and_{handles[1]}_and' \
+                    f'_{len(conversations_metadata[conversation_id]["participants"]) - 2}_more'
+            else:
+                # just use the conversation id
+                group_name = conversation_id
+
+        # create a list of names of the form '@name1, @name2 and @name3'
+        # to use as a headline in the output file
+        escaped_participant_names = [
+            participant_name.replace('_', '\\_')
+            for participant_name in conversations_metadata[conversation_id]['participant_names']
+        ]
+        name_list = ', '.join(escaped_participant_names[:-1]) + \
+                    (f' and {escaped_participant_names[-1]}'
+                     if len(escaped_participant_names) > 1
+                     else escaped_participant_names[0])
+
+        if len(messages) > 1000:
+            for chunk_index, chunk in enumerate(chunks(messages, 1000)):
+                markdown = ''
+                markdown += f'# {official_name}\n'
+                markdown += f'## Group conversation between {name_list}, part {chunk_index + 1}: ##\n'
+                markdown += ''.join(md for _, md in chunk)
+                conversation_output_filename = \
+                    group_dm_output_filename_template.format(f'{group_name}_part{chunk_index + 1:03}')
+
+                # write part to a markdown file
+                with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                    f.write(markdown)
+                print(f'Wrote {len(chunk)} messages to {conversation_output_filename}')
+                num_written_files += 1
+        else:
+            markdown = ''
+            markdown += f'# {official_name}\n'
+            markdown += f'## Group conversation between {name_list}: ##\n'
+            markdown += ''.join(md for _, md in messages)
+            conversation_output_filename = group_dm_output_filename_template.format(group_name)
+
+            with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                f.write(markdown)
+            print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
+            num_written_files += 1
+
+        num_written_messages += len(messages)
+
+    print(f"\nWrote {len(conversations_messages)} direct message group conversations "
+          f"({num_written_messages} total messages) to {num_written_files} markdown files")
+
+
 def main():
 
     input_folder = '.'
@@ -601,6 +847,7 @@ def main():
     output_followers_filename = 'followers.txt'
     user_id_URL_template = 'https://twitter.com/i/user/{}'
     dm_output_filename_template = 'DMs-Archive-{}.md'
+    group_dm_output_filename_template = 'DMs-Group-Archive-{}.md'
 
     html_template = """\
 <!doctype html>
@@ -641,6 +888,7 @@ def main():
     parse_followings(data_folder, users, user_id_URL_template, output_following_filename)
     parse_followers(data_folder, users, user_id_URL_template, output_followers_filename)
     parse_direct_messages(data_folder, username, users, user_id_URL_template, dm_output_filename_template)
+    parse_group_direct_messages(data_folder, username, users, user_id_URL_template, group_dm_output_filename_template)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
