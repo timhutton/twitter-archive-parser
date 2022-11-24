@@ -31,7 +31,6 @@ import subprocess
 import sys
 import time
 # hot-loaded if needed, see import_module():
-#  dataclasses (must be installed for python 3.6, is bundled since 3.7)
 #  imagesize
 #  requests
 
@@ -58,25 +57,6 @@ def import_module(module):
             exit()
         subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
         return importlib.import_module(module)
-
-
-import_module('dataclasses')
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class PathConfig:
-    dir_archive: str
-    dir_input_data: str
-    dir_input_media: str
-    dir_output_media: str
-    file_output_following: str
-    file_output_followers: str
-    file_template_dm_output: str
-    file_account_js: str
-    file_download_log: str
-    file_tweet_icon: str
-    files_input_tweets: str
 
 
 def get_twitter_api_guest_token(session, bearer_token):
@@ -608,36 +588,23 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
           f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
 
 
-def init_paths():
-    dir_archive             = '.'
-    dir_input_data          = os.path.join(dir_archive,       'data')
-    dir_input_media         = find_dir_input_media(dir_input_data)
-    dir_output_media        = os.path.join(dir_archive,       'media')
-    file_output_following   = os.path.join(dir_archive,       'following.txt')
-    file_output_followers   = os.path.join(dir_archive,       'followers.txt')
-    file_template_dm_output = os.path.join(dir_archive,       'DMs-Archive-{}.md')
-    file_account_js         = os.path.join(dir_input_data,    'account.js')
-    file_download_log       = os.path.join(dir_output_media,  'download_log.txt')
-    file_tweet_icon         = os.path.join(dir_output_media,  'tweet.ico')
-    files_input_tweets      = find_files_input_tweets(dir_input_data)
-
-    return PathConfig(
-        dir_archive                = dir_archive,
-        dir_input_data             = dir_input_data,
-        dir_input_media            = dir_input_media,
-        dir_output_media           = dir_output_media,
-        file_output_following      = file_output_following,
-        file_output_followers      = file_output_followers,
-        file_template_dm_output    = file_template_dm_output,
-        file_account_js            = file_account_js,
-        file_download_log          = file_download_log,
-        file_tweet_icon            = file_tweet_icon,
-        files_input_tweets         = files_input_tweets,
-    )
-
+class PathConfig:
+    """Helper class containing constants for various directories and files."""
+    def __init__(self, dir_archive, dir_output):
+        self.dir_input_data          = os.path.join(dir_archive,           'data')
+        self.dir_input_media         = find_dir_input_media(self.dir_input_data)
+        self.dir_output_media        = os.path.join(dir_output,            'media')
+        self.file_output_following   = os.path.join(dir_output,            'following.txt')
+        self.file_output_followers   = os.path.join(dir_output,            'followers.txt')
+        self.file_template_dm_output = os.path.join(dir_output,            'DMs-Archive-{}.md')
+        self.file_account_js         = os.path.join(self.dir_input_data,   'account.js')
+        self.file_download_log       = os.path.join(self.dir_output_media, 'download_log.txt')
+        self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
+        self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
+ 
 
 def main():
-    paths = init_paths()
+    paths = PathConfig(dir_archive='.', dir_output='.')
 
     # Extract the username from data/account.js
     if not os.path.isfile(paths.file_account_js):
