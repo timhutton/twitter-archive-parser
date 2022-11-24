@@ -35,6 +35,7 @@ Some of the functionality requires the `requests` and `imagesize` modules. `pars
 
 ## Related tools:
 If our script doesn't do what you want then maybe a different tool will help:
+- https://github.com/Webklex/tbm download Twitter bookmarks incl. download of all media, GUI/search interface via local server
 - https://github.com/selfawaresoup/twitter-tools
 - https://github.com/roobottom/twitter-archive-to-markdown-files
 - https://gist.github.com/divyajyotiuk/9fb29c046e1dfcc8d5683684d7068efe#file-get_twitter_bookmarks_v3-py
