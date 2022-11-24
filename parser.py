@@ -45,6 +45,46 @@ class UserData:
         self.id = id
         self.handle = handle
 
+class PathConfig:
+    """
+    Helper class containing constants for various directories and files.
+    
+    The script will only add / change / delete content in its own directories, which start with `parser-`.
+    Files within `parser-output` are the end result that the user is probably interested in.
+    Files within `parser-cache` are temporary working files, which improve the efficiency if you run
+    this script multiple times. They can safely be removed without harming the consistency of  the
+    files within `parser-output`.
+    """
+    def __init__(self, dir_archive):
+        self.dir_archive             = dir_archive
+        self.dir_input_data          = os.path.join(self.dir_archive,      'data')
+        self.dir_input_media         = find_dir_input_media(self.dir_input_data)
+        self.dir_output              = os.path.join(dir_archive,           'parser-output')
+        self.dir_output_media        = os.path.join(self.dir_output,       'media')
+        self.dir_output_cache        = os.path.join(self.dir_archive,      'parser-cache')
+        self.file_account_js         = os.path.join(self.dir_input_data,   'account.js')
+        self.file_download_log       = os.path.join(self.dir_output_cache, 'download_log.txt')
+        self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
+        self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
+
+        # structured like an actual tweet output file, can be used to compute relative urls to a media file
+        self.example_file_output_tweets = self.create_path_for_file_output_tweets(year=2020, month=12)
+
+    def create_path_for_file_output_tweets(self, year, month, format="html", kind="tweets")->str:
+        """Builds the path for a tweet-archive file based on some properties."""
+        return os.path.join(self.dir_output, f"{kind}-{format}", f"{year:04}", f"{year:04}-{month:02}-01-{kind}.{format}")
+
+    def create_path_for_file_output_dms(self, name, index=None, format="html", kind="DMs")->str:
+        """Builds the path for a dm-archive file based on some properties."""
+        index_suffix = ""
+        if (index):
+            index_suffix = f"-part{index:02}"
+        return os.path.join(self.dir_output, kind, f"{kind}-{name}{index_suffix}.{format}")
+
+    def create_path_for_file_output_single(self, format: str, kind: str)->str:
+        """Builds the path for a single output file which, i.e. one that is not part of a larger group or sequence."""
+        return os.path.join(self.dir_output, f"{kind}.{format}")
+
 
 def import_module(module):
     """Imports a module specified by a string. Example: requests = import_module('requests')"""
@@ -57,6 +97,24 @@ def import_module(module):
             exit()
         subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
         return importlib.import_module(module)
+
+
+def open_and_mkdirs(path_file):
+    """Opens a file for writing. If the parent directory does not exist yet, it is created first."""
+    mkdirs_for_file(path_file)
+    return open(path_file, 'w', encoding='utf-8')
+
+
+def mkdirs_for_file(path_file):
+    """Creates the parent directory of the given file, if it does not exist yet."""
+    path_dir = os.path.split(path_file)[0]
+    os.makedirs(path_dir, exist_ok=True)
+
+
+def rel_url(media_path, document_path):
+    """Computes the relative URL needed to link from `document_path` to `media_path`.
+       Assumes that `document_path` points to a file (e.g. `.md` or `.html`), not a directory."""
+    return os.path.relpath(media_path, os.path.split(document_path)[0]).replace("\\", "/")
 
 
 def get_twitter_api_guest_token(session, bearer_token):
@@ -134,13 +192,13 @@ def read_json_from_js_file(filename):
         return json.loads(data)
 
 
-def extract_username(paths):
+def extract_username(paths: PathConfig):
     """Returns the user's Twitter username from account.js."""
     account = read_json_from_js_file(paths.file_account_js)
     return account[0]['account']['username']
 
 
-def convert_tweet(tweet, username, media_sources, users, paths):
+def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
@@ -176,7 +234,7 @@ def convert_tweet(tweet, username, media_sources, users, paths):
     header_markdown = ''
     header_html = ''
     if 'in_reply_to_status_id' in tweet:
-        # match and remove all occurences of '@username ' at the start of the body
+        # match and remove all occurrences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
             body_markdown = body_markdown[len(replying_to):]
@@ -205,7 +263,7 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                 archive_media_filename = tweet_id_str + '-' + original_filename
                 archive_media_path = os.path.join(paths.dir_input_media, archive_media_filename)
                 file_output_media = os.path.join(paths.dir_output_media, archive_media_filename)
-                media_url = f'{os.path.split(paths.dir_output_media)[1]}/{archive_media_filename}'
+                media_url = rel_url(file_output_media, paths.example_file_output_tweets)
                 markdown += '' if not markdown and body_markdown == original_url else '\n\n'
                 html += '' if not html and body_html == original_url else '<br>'
                 if os.path.isfile(archive_media_path):
@@ -224,7 +282,7 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                         for archive_media_path in archive_media_paths:
                             archive_media_filename = os.path.split(archive_media_path)[-1]
                             file_output_media = os.path.join(paths.dir_output_media, archive_media_filename)
-                            media_url = f'{os.path.split(paths.dir_output_media)[1]}/{archive_media_filename}'
+                            media_url = rel_url(file_output_media, paths.example_file_output_tweets)
                             if not os.path.isfile(file_output_media):
                                 shutil.copy(archive_media_path, file_output_media)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
@@ -255,8 +313,9 @@ def convert_tweet(tweet, username, media_sources, users, paths):
     body_html = '<p><blockquote>' + '<br>\n'.join(body_html.splitlines()) + '</blockquote>'
     # append the original Twitter URL as a link
     original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
-    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{paths.file_tweet_icon}" width="12" /> [{timestamp_str}]({original_tweet_url})'
-    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{paths.file_tweet_icon}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    icon_url = rel_url(paths.file_tweet_icon, paths.example_file_output_tweets) 
+    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{icon_url}" width="12" /> [{timestamp_str}]({original_tweet_url})'
+    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{icon_url}" width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
     if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
         id = tweet['in_reply_to_user_id']
@@ -366,13 +425,14 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
-def download_larger_media(media_sources, paths):
+def download_larger_media(media_sources, paths: PathConfig):
     """Uses (filename, URL) tuples in media_sources to download files from remote storage.
        Aborts downloads if the remote file is the same size or smaller than the existing local version.
        Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
     """
     # Log to file as well as the console
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
+    mkdirs_for_file(paths.file_download_log)
     logfile_handler = logging.FileHandler(filename=paths.file_download_log, mode='w')
     logfile_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(logfile_handler)
@@ -407,7 +467,7 @@ def download_larger_media(media_sources, paths):
     print(f'Wrote log to {paths.file_download_log}')
 
 
-def parse_tweets(username, users, html_template, paths):
+def parse_tweets(username, users, html_template, paths: PathConfig):
     """Read tweets from paths.files_input_tweets, write to *.md and *.html.
        Copy the media used to paths.dir_output_media.
        Collect user_id:user_handle mappings for later use, in 'users'.
@@ -426,18 +486,19 @@ def parse_tweets(username, users, html_template, paths):
     for timestamp, md, html in tweets:
         # Use a (markdown) filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
-        filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}' # change to group by day or year or timestamp
-        grouped_tweets[filename].append((md, html))
+        grouped_tweets[(dt.year, dt.month)].append((md, html))
 
-    for filename, content in grouped_tweets.items():
+    for (year, month), content in grouped_tweets.items():
         # Write into *.md files
         md_string =  '\n\n----\n\n'.join(md for md, _ in content)
-        with open(f'{filename}.md', 'w', encoding='utf-8') as f:
+        md_path = paths.create_path_for_file_output_tweets(year, month, format="md")
+        with open_and_mkdirs(md_path) as f:
             f.write(md_string)
 
         # Write into *.html files
         html_string = '<hr>\n'.join(html for _, html in content)
-        with open(f'{filename}.html', 'w', encoding='utf-8') as f:
+        html_path = paths.create_path_for_file_output_tweets(year, month, format="html")
+        with open_and_mkdirs(html_path) as f:
             f.write(html_template.format(html_string))
 
     print(f'Wrote {len(tweets)} tweets to *.md and *.html, with images and video embedded from {paths.dir_output_media}')
@@ -445,7 +506,7 @@ def parse_tweets(username, users, html_template, paths):
     return media_sources
 
 
-def parse_followings(users, URL_template_user_id, paths):
+def parse_followings(users, URL_template_user_id, paths: PathConfig):
     """Parse paths.dir_input_data/following.js, write to paths.file_output_following.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -460,12 +521,13 @@ def parse_followings(users, URL_template_user_id, paths):
         handle = users[id].handle if id in users else '~unknown~handle~'
         following.append(handle + ' ' + URL_template_user_id.format(id))
     following.sort()
-    with open(paths.file_output_following, 'w', encoding='utf8') as f:
+    following_output_path = paths.create_path_for_file_output_single(format="txt", kind="following")
+    with open_and_mkdirs(following_output_path) as f:
         f.write('\n'.join(following))
-    print(f"Wrote {len(following)} accounts to {paths.file_output_following}")
+    print(f"Wrote {len(following)} accounts to {following_output_path}")
 
 
-def parse_followers(users, URL_template_user_id, paths):
+def parse_followers(users, URL_template_user_id, paths: PathConfig):
     """Parse paths.dir_input_data/followers.js, write to paths.file_output_followers.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -480,9 +542,10 @@ def parse_followers(users, URL_template_user_id, paths):
         handle = users[id].handle if id in users else '~unknown~handle~'
         followers.append(handle + ' ' + URL_template_user_id.format(id))
     followers.sort()
-    with open(paths.file_output_followers, 'w', encoding='utf8') as f:
+    followers_output_path = paths.create_path_for_file_output_single(format="txt", kind="followers")
+    with open_and_mkdirs(followers_output_path) as f:
         f.write('\n'.join(followers))
-    print(f"Wrote {len(followers)} accounts to {paths.file_output_followers}")
+    print(f"Wrote {len(followers)} accounts to {followers_output_path}")
 
 
 def chunks(lst: list, n: int):
@@ -491,7 +554,7 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(username, users, URL_template_user_id, paths):
+def parse_direct_messages(username, users, URL_template_user_id, paths: PathConfig):
     """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
@@ -564,24 +627,23 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
                 markdown = ''
                 markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
-                conversation_output_filename = \
-                    paths.file_template_dm_output.format(f'{other_user_short_name}_part{chunk_index+1:03}')
+                conversation_output_path = paths.create_path_for_file_output_dms(name=other_user_short_name, index=(chunk_index + 1), format="md")
 
                 # write part to a markdown file
-                with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                with open_and_mkdirs(conversation_output_path) as f:
                     f.write(markdown)
-                print(f'Wrote {len(chunk)} messages to {conversation_output_filename}')
+                print(f'Wrote {len(chunk)} messages to {conversation_output_path}')
                 num_written_files += 1
 
         else:
             markdown = ''
             markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
-            conversation_output_filename = paths.file_template_dm_output.format(other_user_short_name)
+            conversation_output_path = paths.create_path_for_file_output_dms(name=other_user_short_name, format="md")
 
-            with open(conversation_output_filename, 'w', encoding='utf8') as f:
+            with open_and_mkdirs(conversation_output_path) as f:
                 f.write(markdown)
-            print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
+            print(f'Wrote {len(messages)} messages to {conversation_output_path}')
             num_written_files += 1
 
         num_written_messages += len(messages)
@@ -590,23 +652,8 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
           f"({num_written_messages} total messages) to {num_written_files} markdown files\n")
 
 
-class PathConfig:
-    """Helper class containing constants for various directories and files."""
-    def __init__(self, dir_archive, dir_output):
-        self.dir_input_data          = os.path.join(dir_archive,           'data')
-        self.dir_input_media         = find_dir_input_media(self.dir_input_data)
-        self.dir_output_media        = os.path.join(dir_output,            'media')
-        self.file_output_following   = os.path.join(dir_output,            'following.txt')
-        self.file_output_followers   = os.path.join(dir_output,            'followers.txt')
-        self.file_template_dm_output = os.path.join(dir_output,            'DMs-Archive-{}.md')
-        self.file_account_js         = os.path.join(self.dir_input_data,   'account.js')
-        self.file_download_log       = os.path.join(self.dir_output_media, 'download_log.txt')
-        self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
-        self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
-
-
 def main():
-    paths = PathConfig(dir_archive='.', dir_output='.')
+    paths = PathConfig(dir_archive='.')
 
     # Extract the username from data/account.js
     if not os.path.isfile(paths.file_account_js):
@@ -641,6 +688,8 @@ def main():
     os.makedirs(paths.dir_output_media, exist_ok = True)
     if not os.path.isfile(paths.file_tweet_icon):
         shutil.copy('assets/images/favicon.ico', paths.file_tweet_icon);
+
+    # TODO move files from older top-level folders, if they have been written by an older version of this script
 
     media_sources = parse_tweets(username, users, html_template, paths)
     parse_followings(users, URL_template_user_id, paths)
