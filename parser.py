@@ -519,6 +519,7 @@ def parse_direct_messages(data_folder, output_media_folder_name, username, users
                                 original_expanded_url = message_create['urls'][0]['expanded']
                                 message_id = message_create['id']
                                 media_hash_and_type = message_create['mediaUrls'][0].split('/')[-1]
+                                media_id = message_create['mediaUrls'][0].split('/')[-2]
                                 archive_media_filename = f'{message_id}-{media_hash_and_type}'
                                 new_url = output_media_folder_name + archive_media_filename
                                 archive_media_path = \
@@ -530,9 +531,24 @@ def parse_direct_messages(data_folder, output_media_folder_name, username, users
                                     image_markdown = f'\n![]({new_url})\n'
                                     body = body.replace(original_expanded_url, image_markdown)
 
-                                    # TODO: Save the online location of the best-quality version of this file,
-                                    #  for later upgrading if wanted (see convert_tweet method, but probably
-                                    #  with a different url scheme)
+                                    # Save the online location of the best-quality version of this file,
+                                    # for later upgrading if wanted
+                                    best_quality_url = \
+                                        f'https://ton.twitter.com/i//ton/data/dm/' \
+                                        f'{message_id}/{media_id}/{media_hash_and_type}'
+                                    # there is no ':orig' here, the url without any suffix has the original size
+
+                                    # TODO: a cookie (and a 'Referer: https://twitter.com' header)
+                                    #  is needed to retrieve it, so the url might be useless anyway...
+
+                                    # WARNING: Do not uncomment the statement below until the cookie problem is solved!
+                                    # media_sources.append(
+                                    #     (
+                                    #         os.path.join(output_media_folder_name, archive_media_filename),
+                                    #         best_quality_url
+                                    #     )
+                                    # )
+
                                 else:
                                     archive_media_paths = glob.glob(
                                         os.path.join(data_folder, 'direct_messages_media', message_id + '*'))
@@ -545,7 +561,10 @@ def parse_direct_messages(data_folder, output_media_folder_name, username, users
                                             video_markdown = f'\n<video controls><source src="{media_url}">' \
                                                              f'Your browser does not support the video tag.</video>\n'
                                             body = body.replace(original_expanded_url, video_markdown)
-                                    # TODO: save the online location of the best-quality version (see above)
+
+                                    # TODO: maybe  also save the online location of the best-quality version for videos?
+                                    #  (see above)
+
                                     else:
                                         print(f'Warning: missing local file: {archive_media_path}. '
                                               f'Using original link instead: {original_expanded_url})')
