@@ -31,9 +31,9 @@ import subprocess
 import sys
 import time
 # hot-loaded if needed, see import_module():
+#  dataclasses (must be installed for python 3.6, is bundled since 3.7)
 #  imagesize
 #  requests
-#  dataclasses (must be installed for python 3.6, is bundled since 3.7)
 
 
 # Print a compile-time error in Python < 3.6. This line does nothing in Python 3.6+ but is reported to the user
@@ -427,7 +427,7 @@ def download_larger_media(media_sources, paths):
 
 
 def parse_tweets(username, users, html_template, paths):
-    """Read tweets from files_paths_input_tweets, write to *.md and *.html.
+    """Read tweets from paths.files_input_tweets, write to *.md and *.html.
        Copy the media used to paths.dir_output_media.
        Collect user_id:user_handle mappings for later use, in 'users'.
        Returns the mapping from media filename to best-quality URL.
@@ -454,10 +454,10 @@ def parse_tweets(username, users, html_template, paths):
         with open(f'{filename}.md', 'w', encoding='utf-8') as f:
             f.write(md_string)
 
-    # Write into *.html files
-    html_string = '<hr>\n'.join(html for _, html in content)
-    with open(f'{filename}.html', 'w', encoding='utf-8') as f:
-        f.write(html_template.format(html_string))
+        # Write into *.html files
+        html_string = '<hr>\n'.join(html for _, html in content)
+        with open(f'{filename}.html', 'w', encoding='utf-8') as f:
+            f.write(html_template.format(html_string))
 
     print(f'Wrote {len(tweets)} tweets to *.md and *.html, with images and video embedded from {paths.dir_output_media}')
 
