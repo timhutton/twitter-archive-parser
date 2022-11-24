@@ -204,15 +204,16 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                 original_filename = os.path.split(original_expanded_url)[1]
                 archive_media_filename = tweet_id_str + '-' + original_filename
                 archive_media_path = os.path.join(paths.dir_input_media, archive_media_filename)
-                new_url = paths.dir_output_media + archive_media_filename
+                file_output_media = os.path.join(paths.dir_output_media, archive_media_filename)
+                media_url = f'{os.path.split(paths.dir_output_media)[1]}/{archive_media_filename}'
                 markdown += '' if not markdown and body_markdown == original_url else '\n\n'
                 html += '' if not html and body_html == original_url else '<br>'
                 if os.path.isfile(archive_media_path):
                     # Found a matching image, use this one
-                    if not os.path.isfile(new_url):
-                        shutil.copy(archive_media_path, new_url)
-                    markdown += f'![]({new_url})'
-                    html += f'<img src="{new_url}"/>'
+                    if not os.path.isfile(file_output_media):
+                        shutil.copy(archive_media_path, file_output_media)
+                    markdown += f'![]({media_url})'
+                    html += f'<img src="{media_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
                     media_sources.append((os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url))
@@ -222,9 +223,10 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                     if len(archive_media_paths) > 0:
                         for archive_media_path in archive_media_paths:
                             archive_media_filename = os.path.split(archive_media_path)[-1]
-                            media_url = f'{paths.dir_output_media}{archive_media_filename}'
-                            if not os.path.isfile(media_url):
-                                shutil.copy(archive_media_path, media_url)
+                            file_output_media = os.path.join(paths.dir_output_media, archive_media_filename)
+                            media_url = f'{os.path.split(paths.dir_output_media)[1]}/{archive_media_filename}'
+                            if not os.path.isfile(file_output_media):
+                                shutil.copy(archive_media_path, file_output_media)
                             markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                             html += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
                             # Save the online location of the best-quality version of this file, for later upgrading if wanted
@@ -601,7 +603,7 @@ class PathConfig:
         self.file_download_log       = os.path.join(self.dir_output_media, 'download_log.txt')
         self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
         self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
- 
+
 
 def main():
     paths = PathConfig(dir_archive='.', dir_output='.')
