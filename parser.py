@@ -634,18 +634,18 @@ def find_group_dm_conversation_participant_ids(conversation: dict) -> set:
     return group_user_ids
 
 
-def parse_group_direct_messages(data_folder, username, users, user_id_url_template, group_dm_output_filename_template):
     """Parse data_folder/direct-messages-group.js, write to one markdown file per conversation.
        Query Twitter API for the missing user handles, if the user agrees.
     """
     # Scan the group DMs for missing user handles
-    group_dms_json = read_json_from_js_file(os.path.join(data_folder, 'direct-messages-group.js'))
     dm_user_ids = set()
     for conversation in group_dms_json:
         participants = find_group_direct_message_participants(conversation)
         for participant_id in participants:
             dm_user_ids.add(participant_id)
     lookup_users(list(dm_user_ids), users)
+def parse_group_direct_messages(username, users, user_id_url_template, paths):
+    group_dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages-group.js'))
 
     # Parse the group DMs, store messages and metadata in a dict
     group_conversations_messages = defaultdict(list)
@@ -828,7 +828,7 @@ def parse_group_direct_messages(data_folder, username, users, user_id_url_templa
                 markdown += f'## Group conversation between {name_list}, part {chunk_index + 1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
                 conversation_output_filename = \
-                    group_dm_output_filename_template.format(f'{group_name}_part{chunk_index + 1:03}')
+                    paths.file_template_group_dm_output.format(f'{group_name}_part{chunk_index + 1:03}')
 
                 # write part to a markdown file
                 with open(conversation_output_filename, 'w', encoding='utf8') as f:
@@ -840,7 +840,7 @@ def parse_group_direct_messages(data_folder, username, users, user_id_url_templa
             markdown += f'# {official_name}\n'
             markdown += f'## Group conversation between {name_list}: ##\n'
             markdown += ''.join(md for _, md in messages)
-            conversation_output_filename = group_dm_output_filename_template.format(group_name)
+            conversation_output_filename = paths.file_template_group_dm_output.format(group_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
                 f.write(markdown)
@@ -856,21 +856,21 @@ def parse_group_direct_messages(data_folder, username, users, user_id_url_templa
 class PathConfig:
     """Helper class containing constants for various directories and files."""
     def __init__(self, dir_archive, dir_output):
-        self.dir_input_data          = os.path.join(dir_archive,           'data')
-        self.dir_input_media         = find_dir_input_media(self.dir_input_data)
-        self.dir_output_media        = os.path.join(dir_output,            'media')
-        self.file_output_following   = os.path.join(dir_output,            'following.txt')
-        self.file_output_followers   = os.path.join(dir_output,            'followers.txt')
-        self.file_template_dm_output = os.path.join(dir_output,            'DMs-Archive-{}.md')
-        self.file_account_js         = os.path.join(self.dir_input_data,   'account.js')
-        self.file_download_log       = os.path.join(self.dir_output_media, 'download_log.txt')
-        self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
-        self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
+        self.dir_input_data                = os.path.join(dir_archive,           'data')
+        self.dir_input_media               = find_dir_input_media(self.dir_input_data)
+        self.dir_output_media              = os.path.join(dir_output,            'media')
+        self.file_output_following         = os.path.join(dir_output,            'following.txt')
+        self.file_output_followers         = os.path.join(dir_output,            'followers.txt')
+        self.file_template_dm_output       = os.path.join(dir_output,            'DMs-Archive-{}.md')
+        self.file_template_group_dm_output = os.path.join(dir_output,            'DMs-Group-Archive-{}.md')
+        self.file_account_js               = os.path.join(self.dir_input_data,   'account.js')
+        self.file_download_log             = os.path.join(self.dir_output_media, 'download_log.txt')
+        self.file_tweet_icon               = os.path.join(self.dir_output_media, 'tweet.ico')
+        self.files_input_tweets            = find_files_input_tweets(self.dir_input_data)
 
 
 def main():
     paths = PathConfig(dir_archive='.', dir_output='.')
-    group_dm_output_filename_template = 'DMs-Group-Archive-{}.md'
 
     # Extract the username from data/account.js
     if not os.path.isfile(paths.file_account_js):
@@ -910,8 +910,8 @@ def main():
     parse_followings(users, URL_template_user_id, paths)
     parse_followers(users, URL_template_user_id, paths)
     parse_direct_messages(username, users, URL_template_user_id, paths)
-    parse_group_direct_messages(paths.dir_input_data, username, users, URL_template_user_id, group_dm_output_filename_template)
 
+    parse_group_direct_messages(username, users, URL_template_user_id, paths)
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
