@@ -692,7 +692,65 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
-                            # TODO: image links
+                            # replace image URLs with image links to local files
+                            if 'mediaUrls' in message_create \
+                                    and len(message_create['mediaUrls']) == 1 \
+                                    and 'urls' in message_create:
+                                original_expanded_url = message_create['urls'][0]['expanded']
+                                message_id = message_create['id']
+                                media_hash_and_type = message_create['mediaUrls'][0].split('/')[-1]
+                                media_id = message_create['mediaUrls'][0].split('/')[-2]
+                                archive_media_filename = f'{message_id}-{media_hash_and_type}'
+                                new_url = os.path.join(paths.dir_output_media, archive_media_filename)
+                                archive_media_path = \
+                                    os.path.join(paths.dir_input_data, 'direct_messages_group_media',
+                                                 archive_media_filename)
+                                if os.path.isfile(archive_media_path):
+                                    # found a matching image, use this one
+                                    if not os.path.isfile(new_url):
+                                        shutil.copy(archive_media_path, new_url)
+                                    image_markdown = f'\n![]({new_url})\n'
+                                    body = body.replace(original_expanded_url, image_markdown)
+
+                                    # Save the online location of the best-quality version of this file,
+                                    # for later upgrading if wanted
+                                    best_quality_url = \
+                                        f'https://ton.twitter.com/i//ton/data/dm/' \
+                                        f'{message_id}/{media_id}/{media_hash_and_type}'
+                                    # there is no ':orig' here, the url without any suffix has the original size
+
+                                    # TODO: a cookie (and a 'Referer: https://twitter.com' header)
+                                    #  is needed to retrieve it, so the url might be useless anyway...
+
+                                    # WARNING: Do not uncomment the statement below until the cookie problem is solved!
+                                    # media_sources.append(
+                                    #     (
+                                    #         os.path.join(output_media_folder_name, archive_media_filename),
+                                    #         best_quality_url
+                                    #     )
+                                    # )
+
+                                else:
+                                    archive_media_paths = glob.glob(
+                                        os.path.join(paths.dir_input_data, 'direct_messages_group_media',
+                                                     message_id + '*'))
+                                    if len(archive_media_paths) > 0:
+                                        for archive_media_path in archive_media_paths:
+                                            archive_media_filename = os.path.split(archive_media_path)[-1]
+                                            media_url = os.path.join(paths.dir_output_media,
+                                                                     archive_media_filename)
+                                            if not os.path.isfile(media_url):
+                                                shutil.copy(archive_media_path, media_url)
+                                            video_markdown = f'\n<video controls><source src="{media_url}">' \
+                                                             f'Your browser does not support the video tag.</video>\n'
+                                            body = body.replace(original_expanded_url, video_markdown)
+
+                                    # TODO: maybe  also save the online location of the best-quality version for videos?
+                                    #  (see above)
+
+                                    else:
+                                        print(f'Warning: missing local file: {archive_media_path}. '
+                                              f'Using original link instead: {original_expanded_url})')
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
