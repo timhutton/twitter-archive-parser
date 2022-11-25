@@ -465,9 +465,23 @@ def parse_followings(users, URL_template_user_id, paths):
     print(f"Wrote {len(following)} accounts to {paths.file_output_following}")
 
 
+def collect_user_ids_from_followers(paths) -> list:
+    """
+     Collect all user ids that appear in the followers archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
+    follower_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'follower.js'))
+    # collect all user ids in a list
+    follower_ids = []
+    for follower in follower_json:
+        if 'follower' in follower and 'accountId' in follower['follower']:
+            follower_ids.append(follower['follower']['accountId'])
+    return follower_ids
+
+
 def parse_followers(users, URL_template_user_id, paths):
     """Parse paths.dir_input_data/followers.js, write to paths.file_output_followers.
-       Query Twitter API for the missing user handles, if the user agrees.
     """
     followers = []
     follower_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'follower.js'))
@@ -475,10 +489,9 @@ def parse_followers(users, URL_template_user_id, paths):
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
             follower_ids.append(follower['follower']['accountId'])
-    lookup_users(follower_ids, users)
-    for id in follower_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + URL_template_user_id.format(id))
+    for follower_id in follower_ids:
+        handle = users[follower_id].handle if follower_id in users else '~unknown~handle~'
+        followers.append(handle + ' ' + URL_template_user_id.format(follower_id))
     followers.sort()
     with open(paths.file_output_followers, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
@@ -660,6 +673,10 @@ def main():
 
     media_sources = parse_tweets(username, users, html_template, paths)
     parse_followings(users, URL_template_user_id, paths)
+
+    follower_ids = collect_user_ids_from_followers(paths)
+    print(f'found {len(follower_ids)} user IDs in followers.')
+    lookup_users(follower_ids, users)
     parse_followers(users, URL_template_user_id, paths)
 
     dms_user_ids = collect_user_ids_from_direct_messages(paths)
