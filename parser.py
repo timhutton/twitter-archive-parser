@@ -445,9 +445,23 @@ def parse_tweets(username, users, html_template, paths):
     return media_sources
 
 
+def collect_user_ids_from_followings(paths) -> list:
+    """
+     Collect all user ids that appear in the followings archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
+    following_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'following.js'))
+    # collect all user ids in a list
+    following_ids = []
+    for follow in following_json:
+        if 'following' in follow and 'accountId' in follow['following']:
+            following_ids.append(follow['following']['accountId'])
+    return following_ids
+
+
 def parse_followings(users, URL_template_user_id, paths):
     """Parse paths.dir_input_data/following.js, write to paths.file_output_following.
-       Query Twitter API for the missing user handles, if the user agrees.
     """
     following = []
     following_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'following.js'))
@@ -455,10 +469,9 @@ def parse_followings(users, URL_template_user_id, paths):
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
             following_ids.append(follow['following']['accountId'])
-    lookup_users(following_ids, users)
-    for id in following_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        following.append(handle + ' ' + URL_template_user_id.format(id))
+    for following_id in following_ids:
+        handle = users[following_id].handle if following_id in users else '~unknown~handle~'
+        following.append(handle + ' ' + URL_template_user_id.format(following_id))
     following.sort()
     with open(paths.file_output_following, 'w', encoding='utf8') as f:
         f.write('\n'.join(following))
@@ -672,6 +685,10 @@ def main():
         shutil.copy('assets/images/favicon.ico', paths.file_tweet_icon);
 
     media_sources = parse_tweets(username, users, html_template, paths)
+
+    following_ids = collect_user_ids_from_followings(paths)
+    print(f'found {len(following_ids)} user IDs in followings.')
+    lookup_users(following_ids, users)
     parse_followings(users, URL_template_user_id, paths)
 
     follower_ids = collect_user_ids_from_followers(paths)
