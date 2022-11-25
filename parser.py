@@ -491,21 +491,30 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(username, users, URL_template_user_id, paths):
-    """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
-       Query Twitter API for the missing user handles, if the user agrees.
+def collect_user_ids_from_direct_messages(paths) -> list:
     """
-    # Scan the DMs for missing user handles
+     Collect all user ids that appear in the direct messages archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
     dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages.js'))
-    dm_user_ids = set()
+    # collect all user ids in a set
+    dms_user_ids = set()
     for conversation in dms_json:
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
             dm_conversation = conversation['dmConversation']
             conversation_id = dm_conversation['conversationId']
             user1_id, user2_id = conversation_id.split('-')
-            dm_user_ids.add(user1_id)
-            dm_user_ids.add(user2_id)
-    lookup_users(list(dm_user_ids), users)
+            dms_user_ids.add(user1_id)
+            dms_user_ids.add(user2_id)
+    return list(dms_user_ids)
+
+
+def parse_direct_messages(username, users, URL_template_user_id, paths):
+    """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
+    """
+    # read JSON file
+    dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages.js'))
 
     # Parse the DMs and store the messages in a dict
     conversations_messages = defaultdict(list)
@@ -652,6 +661,10 @@ def main():
     media_sources = parse_tweets(username, users, html_template, paths)
     parse_followings(users, URL_template_user_id, paths)
     parse_followers(users, URL_template_user_id, paths)
+
+    dms_user_ids = collect_user_ids_from_direct_messages(paths)
+    print(f'found {len(dms_user_ids)} user IDs in direct messages.')
+    lookup_users(dms_user_ids, users)
     parse_direct_messages(username, users, URL_template_user_id, paths)
 
     # Download larger images, if the user agrees
