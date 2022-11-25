@@ -116,6 +116,7 @@ def lookup_users(user_ids, users):
     except Exception as err:
         print(f'Failed to download user data: {err}')
 
+
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
     print(f'Parsing {filename}...')
@@ -688,17 +689,17 @@ def main():
 
     following_ids = collect_user_ids_from_followings(paths)
     print(f'found {len(following_ids)} user IDs in followings.')
-    lookup_users(following_ids, users)
-    parse_followings(users, URL_template_user_id, paths)
-
     follower_ids = collect_user_ids_from_followers(paths)
     print(f'found {len(follower_ids)} user IDs in followers.')
-    lookup_users(follower_ids, users)
-    parse_followers(users, URL_template_user_id, paths)
-
     dms_user_ids = collect_user_ids_from_direct_messages(paths)
     print(f'found {len(dms_user_ids)} user IDs in direct messages.')
-    lookup_users(dms_user_ids, users)
+
+    # bulk lookup for user handles from followers, followings and direct messages
+    collected_user_ids = list(set(following_ids).union(set(follower_ids)).union(set(dms_user_ids)))
+    lookup_users(collected_user_ids, users)
+
+    parse_followings(users, URL_template_user_id, paths)
+    parse_followers(users, URL_template_user_id, paths)
     parse_direct_messages(username, users, URL_template_user_id, paths)
 
     # Download larger images, if the user agrees
