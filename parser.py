@@ -101,7 +101,7 @@ def lookup_users(user_ids, users):
         return
     # Account metadata observed at ~2.1KB on average.
     estimated_size = int(2.1 * len(filtered_user_ids))
-    print(f'{len(filtered_user_ids)} users are unknown.')
+    print(f'\n{len(filtered_user_ids)} users are unknown.')
     user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
     if user_input.lower() not in ('y', 'yes'):
         return
@@ -113,6 +113,7 @@ def lookup_users(user_ids, users):
             retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
             for user_id, user in retrieved_users.items():
                 users[user_id] = UserData(user_id, user["screen_name"])
+        print()  # empty line for better readability of output
     except Exception as err:
         print(f'Failed to download user data: {err}')
 
