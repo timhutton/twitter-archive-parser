@@ -599,26 +599,32 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
 
 class PathConfig:
     """Helper class containing constants for various directories and files."""
+
     def __init__(self, dir_archive, dir_output):
-        self.dir_input_data          = os.path.join(dir_archive,           'data')
-        self.dir_input_media         = find_dir_input_media(self.dir_input_data)
-        self.dir_output_media        = os.path.join(dir_output,            'media')
-        self.file_output_following   = os.path.join(dir_output,            'following.txt')
-        self.file_output_followers   = os.path.join(dir_output,            'followers.txt')
-        self.file_template_dm_output = os.path.join(dir_output,            'DMs-Archive-{}.md')
-        self.file_account_js         = os.path.join(self.dir_input_data,   'account.js')
-        self.file_download_log       = os.path.join(self.dir_output_media, 'download_log.txt')
-        self.file_tweet_icon         = os.path.join(self.dir_output_media, 'tweet.ico')
-        self.files_input_tweets      = find_files_input_tweets(self.dir_input_data)
+        self.dir_input_data = os.path.join(dir_archive, 'data')
+        self.file_account_js = os.path.join(self.dir_input_data, 'account.js')
+
+        # check if user is in correct folder
+        if not os.path.isfile(self.file_account_js):
+            print(
+                f'Error: Failed to load {self.file_account_js}. Start this script in the root folder of your Twitter archive.')
+            exit()
+
+        self.dir_input_media = find_dir_input_media(self.dir_input_data)
+        self.dir_output_media = os.path.join(dir_output, 'media')
+        self.file_output_following = os.path.join(dir_output, 'following.txt')
+        self.file_output_followers = os.path.join(dir_output, 'followers.txt')
+        self.file_template_dm_output = os.path.join(dir_output, 'DMs-Archive-{}.md')
+
+        self.file_download_log = os.path.join(self.dir_output_media, 'download_log.txt')
+        self.file_tweet_icon = os.path.join(self.dir_output_media, 'tweet.ico')
+        self.files_input_tweets = find_files_input_tweets(self.dir_input_data)
 
 
 def main():
     paths = PathConfig(dir_archive='.', dir_output='.')
 
-    # Extract the username from data/account.js
-    if not os.path.isfile(paths.file_account_js):
-        print(f'Error: Failed to load {paths.file_account_js}. Start this script in the root folder of your Twitter archive.')
-        exit()
+    # Extract the archive owner's username from data/account.js
     username = extract_username(paths)
 
     # URL config
