@@ -634,17 +634,26 @@ def find_group_dm_conversation_participant_ids(conversation: dict) -> set:
     return group_user_ids
 
 
-    """Parse data_folder/direct-messages-group.js, write to one markdown file per conversation.
-       Query Twitter API for the missing user handles, if the user agrees.
+def collect_user_ids_from_group_direct_messages(paths) -> list:
     """
-    # Scan the group DMs for missing user handles
-    dm_user_ids = set()
+     Collect all user ids that appear in the group direct messages archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
+    group_dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages-group.js'))
+    # collect all user ids in a set
+    group_dms_user_ids = set()
     for conversation in group_dms_json:
-        participants = find_group_direct_message_participants(conversation)
+        participants = find_group_dm_conversation_participant_ids(conversation)
         for participant_id in participants:
-            dm_user_ids.add(participant_id)
-    lookup_users(list(dm_user_ids), users)
+            group_dms_user_ids.add(participant_id)
+    return list(group_dms_user_ids)
+
+
 def parse_group_direct_messages(username, users, user_id_url_template, paths):
+    """Parse data_folder/direct-messages-group.js, write to one markdown file per conversation.
+    """
+    # read JSON file from archive
     group_dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages-group.js'))
 
     # Parse the group DMs, store messages and metadata in a dict
@@ -911,7 +920,16 @@ def main():
     parse_followers(users, URL_template_user_id, paths)
     parse_direct_messages(username, users, URL_template_user_id, paths)
 
+    # find user ids to look up from group dms
+    group_dms_user_ids = collect_user_ids_from_group_direct_messages(paths)
+    # TODO: separate the collecting of user ids out of the other parse* functions in the same way
+    #  and pool the lookups together before all of the other parsing & output generation
+    # look them up
+    lookup_users(group_dms_user_ids, users)
+
+    # parse the content of group dms and write to output files
     parse_group_direct_messages(username, users, URL_template_user_id, paths)
+
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
