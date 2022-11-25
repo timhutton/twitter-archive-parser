@@ -187,7 +187,7 @@ def collect_tweet_id(tweet):
         tweet = tweet['tweet']
     return tweet['id_str']
 
-# returns an it if you give it either an int or a str that can be parsed as 
+# returns an int if you give it either an int or a str that can be parsed as 
 # an int. Otherwise, returns None.
 def parse_as_number(str_or_number):
     if isinstance(str_or_number, str):
