@@ -524,17 +524,77 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
                             to_id = message_create['recipientId']
                             body = message_create['text']
                             # replace t.co URLs with their original versions
-                            if 'urls' in message_create:
+                            if 'urls' in message_create and len(message_create['urls']) > 0:
                                 for url in message_create['urls']:
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # replace image URLs with image links to local files
+                            if 'mediaUrls' in message_create \
+                                    and len(message_create['mediaUrls']) == 1 \
+                                    and 'urls' in message_create:
+                                original_expanded_url = message_create['urls'][0]['expanded']
+                                message_id = message_create['id']
+                                media_hash_and_type = message_create['mediaUrls'][0].split('/')[-1]
+                                media_id = message_create['mediaUrls'][0].split('/')[-2]
+                                archive_media_filename = f'{message_id}-{media_hash_and_type}'
+                                new_url = os.path.join(paths.dir_output_media, archive_media_filename)
+                                archive_media_path = \
+                                    os.path.join(paths.dir_input_data, 'direct_messages_media', archive_media_filename)
+                                if os.path.isfile(archive_media_path):
+                                    # found a matching image, use this one
+                                    if not os.path.isfile(new_url):
+                                        shutil.copy(archive_media_path, new_url)
+                                    image_markdown = f'\n![]({new_url})\n'
+                                    body = body.replace(original_expanded_url, image_markdown)
+
+                                    # Save the online location of the best-quality version of this file,
+                                    # for later upgrading if wanted
+                                    best_quality_url = \
+                                        f'https://ton.twitter.com/i//ton/data/dm/' \
+                                        f'{message_id}/{media_id}/{media_hash_and_type}'
+                                    # there is no ':orig' here, the url without any suffix has the original size
+
+                                    # TODO: a cookie (and a 'Referer: https://twitter.com' header)
+                                    #  is needed to retrieve it, so the url might be useless anyway...
+
+                                    # WARNING: Do not uncomment the statement below until the cookie problem is solved!
+                                    # media_sources.append(
+                                    #     (
+                                    #         os.path.join(output_media_folder_name, archive_media_filename),
+                                    #         best_quality_url
+                                    #     )
+                                    # )
+
+                                else:
+                                    archive_media_paths = glob.glob(
+                                        os.path.join(paths.dir_input_data, 'direct_messages_media', message_id + '*'))
+                                    if len(archive_media_paths) > 0:
+                                        for archive_media_path in archive_media_paths:
+                                            archive_media_filename = os.path.split(archive_media_path)[-1]
+                                            media_url = os.path.join(paths.dir_output_media, archive_media_filename)
+                                            if not os.path.isfile(media_url):
+                                                shutil.copy(archive_media_path, media_url)
+                                            video_markdown = f'\n<video controls><source src="{media_url}">' \
+                                                             f'Your browser does not support the video tag.</video>\n'
+                                            body = body.replace(original_expanded_url, video_markdown)
+
+                                    # TODO: maybe  also save the online location of the best-quality version for videos?
+                                    #  (see above)
+
+                                    else:
+                                        print(f'Warning: missing local file: {archive_media_path}. '
+                                              f'Using original link instead: {original_expanded_url})')
+
                             created_at = message_create['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
-                            from_handle = users[from_id].handle if from_id in users \
+
+                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
                                 else URL_template_user_id.format(from_id)
-                            to_handle = users[to_id].handle if to_id in users else URL_template_user_id.format(to_id)
+                            to_handle = users[to_id].handle.replace('_', '\\_') if to_id in users \
+                                else URL_template_user_id.format(to_id)
+
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
                                                f'({created_at}) ###\n```\n{body}\n```'
                             messages.append((timestamp, message_markdown))
@@ -552,9 +612,12 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
         # sort messages by timestamp
         messages.sort(key=lambda tup: tup[0])
 
-        other_user_name = \
-            users[other_user_id].handle if other_user_id in users else URL_template_user_id.format(other_user_id)
+        other_user_name = users[other_user_id].handle.replace('_', '\\_') if other_user_id in users \
+            else URL_template_user_id.format(other_user_id)
+
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
+
+        escaped_username = username.replace('_', '\\_')
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
         # following this standard, also split up longer conversations in the output files:
@@ -562,7 +625,8 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'## Conversation between {username} and {other_user_name}, part {chunk_index+1}: ##\n'
+                markdown += f'## Conversation between {escaped_username} and {other_user_name}, ' \
+                            f'part {chunk_index+1}: ##\n'
                 markdown += ''.join(md for _, md in chunk)
                 conversation_output_filename = \
                     paths.file_template_dm_output.format(f'{other_user_short_name}_part{chunk_index+1:03}')
@@ -575,7 +639,7 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
 
         else:
             markdown = ''
-            markdown += f'## Conversation between {username} and {other_user_name}: ##\n'
+            markdown += f'## Conversation between {escaped_username} and {other_user_name}: ##\n'
             markdown += ''.join(md for _, md in messages)
             conversation_output_filename = paths.file_template_dm_output.format(other_user_short_name)
 
@@ -922,27 +986,32 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
 
 class PathConfig:
     """Helper class containing constants for various directories and files."""
+
     def __init__(self, dir_archive, dir_output):
-        self.dir_input_data                = os.path.join(dir_archive,           'data')
-        self.dir_input_media               = find_dir_input_media(self.dir_input_data)
-        self.dir_output_media              = os.path.join(dir_output,            'media')
-        self.file_output_following         = os.path.join(dir_output,            'following.txt')
-        self.file_output_followers         = os.path.join(dir_output,            'followers.txt')
-        self.file_template_dm_output       = os.path.join(dir_output,            'DMs-Archive-{}.md')
-        self.file_template_group_dm_output = os.path.join(dir_output,            'DMs-Group-Archive-{}.md')
-        self.file_account_js               = os.path.join(self.dir_input_data,   'account.js')
-        self.file_download_log             = os.path.join(self.dir_output_media, 'download_log.txt')
-        self.file_tweet_icon               = os.path.join(self.dir_output_media, 'tweet.ico')
-        self.files_input_tweets            = find_files_input_tweets(self.dir_input_data)
+        self.dir_input_data = os.path.join(dir_archive, 'data')
+        self.file_account_js = os.path.join(self.dir_input_data, 'account.js')
+
+        # check if user is in correct folder
+        if not os.path.isfile(self.file_account_js):
+            print(
+                f'Error: Failed to load {self.file_account_js}. Start this script in the root folder of your Twitter archive.')
+            exit()
+
+        self.dir_input_media = find_dir_input_media(self.dir_input_data)
+        self.dir_output_media = os.path.join(dir_output, 'media')
+        self.file_output_following = os.path.join(dir_output, 'following.txt')
+        self.file_output_followers = os.path.join(dir_output, 'followers.txt')
+        self.file_template_dm_output = os.path.join(dir_output, 'DMs-Archive-{}.md')
+        self.file_template_group_dm_output = os.path.join(dir_output, 'DMs-Group-Archive-{}.md')
+        self.file_download_log = os.path.join(self.dir_output_media, 'download_log.txt')
+        self.file_tweet_icon = os.path.join(self.dir_output_media, 'tweet.ico')
+        self.files_input_tweets = find_files_input_tweets(self.dir_input_data)
 
 
 def main():
     paths = PathConfig(dir_archive='.', dir_output='.')
 
-    # Extract the username from data/account.js
-    if not os.path.isfile(paths.file_account_js):
-        print(f'Error: Failed to load {paths.file_account_js}. Start this script in the root folder of your Twitter archive.')
-        exit()
+    # Extract the archive owner's username from data/account.js
     username = extract_username(paths)
 
     # URL config
