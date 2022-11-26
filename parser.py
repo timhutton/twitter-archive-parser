@@ -147,7 +147,8 @@ def convert_tweet(tweet, username, media_sources, users, paths):
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
-    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
+    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp()))
+    # Example: Tue Mar 19 14:05:17 +0000 2019
     body_markdown = tweet['full_text']
     body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
@@ -159,7 +160,8 @@ def convert_tweet(tweet, username, media_sources, users, paths):
             if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
                 # Shorten links similiar to twitter
                 netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
-                path_short = url.path if len(url.path + '?' + url.query) < 15 else (url.path + '?' + url.query)[:15] + '\u2026'
+                path_short = url.path if len(url.path + '?' + url.query) < 15 \
+                    else (url.path + '?' + url.query)[:15] + '\u2026'
                 tweet['entities']['urls'].append({
                     'url': word,
                     'expanded_url': word,
@@ -220,7 +222,9 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                     html += f'<img src="{media_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.append((os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url))
+                    media_sources.append(
+                        (os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url)
+                    )
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(paths.dir_input_media, tweet_id_str + '*'))
@@ -247,12 +251,17 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                                             best_quality_url = variant['url']
                                             best_bitrate = bitrate
                                 if best_bitrate == -1:
-                                    print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
+                                    print(f"Warning No URL found for {original_url} {original_expanded_url} "
+                                          f"{archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.append((os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url))
+                                    media_sources.append(
+                                        (os.path.join(paths.dir_output_media, archive_media_filename),
+                                         best_quality_url)
+                                    )
                     else:
-                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: '
+                              f'{original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
                         html += f'<a href="{original_url}">{original_url}</a>'
         body_markdown = body_markdown.replace(original_url, markdown)
@@ -330,7 +339,8 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                 # Try to get content of response as `res.text`.
                 # For twitter.com, this will be empty in most (all?) cases.
                 # It is successfully tested with error responses from other domains.
-                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"')
+                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". '
+                                f'Response content: "{res.text}"')
             byte_size_after = int(res.headers['content-length'])
             if byte_size_after != byte_size_before:
                 # Proceed with the full download
@@ -399,7 +409,9 @@ def download_larger_media(media_sources, paths):
         success_count = 0
         retries = []
         for index, (local_media_path, media_url) in enumerate(media_sources):
-            success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+            success, bytes_downloaded = download_file_if_larger(
+                media_url, local_media_path, index + 1, number_of_files, sleep_time
+            )
             if success:
                 success_count += 1
             else:
@@ -441,7 +453,8 @@ def parse_tweets(username, users, html_template, paths):
     for timestamp, md, html in tweets:
         # Use a (markdown) filename that can be imported into Jekyll: YYYY-MM-DD-your-title-here.md
         dt = datetime.datetime.fromtimestamp(timestamp)
-        filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}' # change to group by day or year or timestamp
+        filename = f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}'
+        # change the line above to group by day or year or timestamp
         grouped_tweets[filename].append((md, html))
 
     for filename, content in grouped_tweets.items():
@@ -455,7 +468,8 @@ def parse_tweets(username, users, html_template, paths):
         with open(f'{filename}.html', 'w', encoding='utf-8') as f:
             f.write(html_template.format(html_string))
 
-    print(f'Wrote {len(tweets)} tweets to *.md and *.html, with images and video embedded from {paths.dir_output_media}')
+    print(f'Wrote {len(tweets)} tweets to *.md and *.html, '
+          f'with images and video embedded from {paths.dir_output_media}')
 
     return media_sources
 
@@ -475,7 +489,7 @@ def collect_user_ids_from_followings(paths) -> list:
     return following_ids
 
 
-def parse_followings(users, URL_template_user_id, paths):
+def parse_followings(users, user_id_url_template, paths):
     """Parse paths.dir_input_data/following.js, write to paths.file_output_following.
     """
     following = []
@@ -486,7 +500,7 @@ def parse_followings(users, URL_template_user_id, paths):
             following_ids.append(follow['following']['accountId'])
     for following_id in following_ids:
         handle = users[following_id].handle if following_id in users else '~unknown~handle~'
-        following.append(handle + ' ' + URL_template_user_id.format(following_id))
+        following.append(handle + ' ' + user_id_url_template.format(following_id))
     following.sort()
     with open(paths.file_output_following, 'w', encoding='utf8') as f:
         f.write('\n'.join(following))
@@ -508,7 +522,7 @@ def collect_user_ids_from_followers(paths) -> list:
     return follower_ids
 
 
-def parse_followers(users, URL_template_user_id, paths):
+def parse_followers(users, user_id_url_template, paths):
     """Parse paths.dir_input_data/followers.js, write to paths.file_output_followers.
     """
     followers = []
@@ -519,7 +533,7 @@ def parse_followers(users, URL_template_user_id, paths):
             follower_ids.append(follower['follower']['accountId'])
     for follower_id in follower_ids:
         handle = users[follower_id].handle if follower_id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + URL_template_user_id.format(follower_id))
+        followers.append(handle + ' ' + user_id_url_template.format(follower_id))
     followers.sort()
     with open(paths.file_output_followers, 'w', encoding='utf8') as f:
         f.write('\n'.join(followers))
@@ -551,7 +565,7 @@ def collect_user_ids_from_direct_messages(paths) -> list:
     return list(dms_user_ids)
 
 
-def parse_direct_messages(username, users, URL_template_user_id, paths):
+def parse_direct_messages(username, users, user_id_url_template, paths):
     """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
     """
     # read JSON file
@@ -641,9 +655,9 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
 
                             from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
-                                else URL_template_user_id.format(from_id)
+                                else user_id_url_template.format(from_id)
                             to_handle = users[to_id].handle.replace('_', '\\_') if to_id in users \
-                                else URL_template_user_id.format(to_id)
+                                else user_id_url_template.format(to_id)
 
                             message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
                                                f'({created_at}) ###\n```\n{body}\n```'
@@ -663,7 +677,7 @@ def parse_direct_messages(username, users, URL_template_user_id, paths):
         messages.sort(key=lambda tup: tup[0])
 
         other_user_name = users[other_user_id].handle.replace('_', '\\_') if other_user_id in users \
-            else URL_template_user_id.format(other_user_id)
+            else user_id_url_template.format(other_user_id)
 
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
 
@@ -1065,7 +1079,7 @@ def main():
     # Extract the archive owner's username from data/account.js
     username = extract_username(paths)
 
-    URL_template_user_id = 'https://twitter.com/i/user/{}'
+    user_id_url_template = 'https://twitter.com/i/user/{}'
 
     html_template = """\
 <!doctype html>
@@ -1108,7 +1122,8 @@ def main():
         set(following_ids).union(set(dms_user_ids)).union(set(group_dms_user_ids))
     )
     collected_user_ids_only_in_followers: set = set(follower_ids).difference(set(collected_user_ids_without_followers))
-    collected_user_ids: list = list(set(collected_user_ids_without_followers).union(collected_user_ids_only_in_followers))
+    collected_user_ids: list = list(set(collected_user_ids_without_followers)
+                                    .union(collected_user_ids_only_in_followers))
 
     print(f'\nfound {len(collected_user_ids)} user IDs overall.')
 
@@ -1125,15 +1140,15 @@ def main():
                                f'about {estimated_follower_lookup_size:,} KB smaller without them.\n'
                                f'Do you want to include handles of your followers '
                                f'in the online lookup of user handles? [Y/n]')
-            if user_input in ['n', 'N', 'no', 'No']:
+            if user_input.lower() in ['n', 'no']:
                 collected_user_ids = collected_user_ids_without_followers
 
     lookup_users(collected_user_ids, users)
 
-    parse_followings(users, URL_template_user_id, paths)
-    parse_followers(users, URL_template_user_id, paths)
-    parse_direct_messages(username, users, URL_template_user_id, paths)
-    parse_group_direct_messages(username, users, URL_template_user_id, paths)
+    parse_followings(users, user_id_url_template, paths)
+    parse_followers(users, user_id_url_template, paths)
+    parse_direct_messages(username, users, user_id_url_template, paths)
+    parse_group_direct_messages(username, users, user_id_url_template, paths)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
