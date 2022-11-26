@@ -45,6 +45,7 @@ class UserData:
         self.id = id
         self.handle = handle
 
+
 class PathConfig:
     """
     Helper class containing constants for various directories and files.
@@ -184,6 +185,7 @@ def lookup_users(user_ids, users):
                 users[user_id] = UserData(user_id, user["screen_name"])
     except Exception as err:
         print(f'Failed to download user data: {err}')
+
 
 def read_json_from_js_file(filename):
     """Reads the contents of a Twitter-produced .js file into a dictionary."""
@@ -1080,6 +1082,10 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
 
 
 def migrate_old_output(paths: PathConfig):
+    """If present, moves media and cache files from the archive root to the new locations in 
+    `paths.dir_output_media` and `paths.dir_output_cache`. Then deletes old output files 
+    (md, html, txt) from the archive root, if the user consents."""
+
     # Create new media folder, so we can potentially use it to move files there
     os.makedirs(paths.dir_output_media, exist_ok=True)
 
@@ -1170,8 +1176,6 @@ def main():
     os.makedirs(paths.dir_output_media, exist_ok=True)
     if not os.path.isfile(paths.file_tweet_icon):
         shutil.copy('assets/images/favicon.ico', paths.file_tweet_icon)
-
-    # TODO move files from older top-level folders, if they have been written by an older version of this script
 
     media_sources = parse_tweets(username, users, html_template, paths)
     parse_followings(users, URL_template_user_id, paths)
