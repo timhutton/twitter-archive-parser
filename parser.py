@@ -1079,6 +1079,62 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
           f"({num_written_messages} total messages) to {num_written_files} markdown files")
 
 
+def migrate_old_output(paths: PathConfig):
+    # Create new media folder, so we can potentially use it to move files there
+    os.makedirs(paths.dir_output_media, exist_ok=True)
+
+    # Move files that we can re-use:
+    if os.path.exists(os.path.join(paths.dir_archive, "media")):
+        files_to_move = glob.glob(os.path.join(paths.dir_archive, "media", "*"))
+        if len(files_to_move) > 0:
+            print(f"Moving {len(files_to_move)} files from 'media' to '{paths.dir_output_media}'")
+            for file_path_to_move in files_to_move:
+                file_name_to_move = os.path.split(file_path_to_move)[1]
+                print(file_name_to_move)
+                os.rename(file_path_to_move, os.path.join(paths.dir_output_media, file_name_to_move))
+        os.rmdir(os.path.join(paths.dir_archive, "media"))
+
+    known_tweets_old_path = os.path.join(paths.dir_archive, "known_tweets.json")
+    known_tweets_new_path = os.path.join(paths.dir_output_cache, "known_tweets.json")
+    if os.path.exists(known_tweets_old_path):
+        os.rename(known_tweets_old_path, known_tweets_new_path)
+
+    # Delete files that would be overwritten anyway (if user consents):
+    output_globs = [
+        "*Tweet-Archive*.html",
+        "*Tweet-Archive*.md",
+        "DMs-Archive-*.html",
+        "DMs-Archive-*.md",
+        "DMs-Group-Archive-*.html",
+        "DMs-Group-Archive-*.md",
+        "followers.txt",
+        "following.txt",
+    ]
+    files_to_delete = []
+    
+    for output_glob in output_globs:
+        files_to_delete += glob.glob(os.path.join(paths.dir_archive, output_glob))
+        
+    # TODO maybe remove those files only after the new ones have been generated? This way, the user would never
+    # end up with less output than before. On the other hand, they might end up with old *and* new versions
+    # of the output, if the script crashes before it reaches the code to delete the old version.
+    if len(files_to_delete) > 0:
+        print(f"\nThere are {len(files_to_delete)} files in the root of the archive,")
+        print("which were probably generated from an older version of this script.")
+        print("Since then, the directory layout of twitter-archive-parser has changed")
+        print("and these files are generated into the sub-directory 'parser-output' or")
+        print("various sub-sub-directories therein. These are the affected files:")
+
+        for file_to_delete in files_to_delete:
+            print(file_to_delete)
+
+        user_input = input('\nOK delete these files? (If the the directory layout would not have changed, they would be overwritten anyway) [y/N]')
+        if user_input.lower() in ('y', 'yes'):
+            for file_to_delete in files_to_delete:
+                os.remove(file_to_delete)
+            print(f"Files have been deleted. New versions of these files will be generated into 'parser-output' soon.")
+
+
 def main():
     paths = PathConfig(dir_archive='.')
 
@@ -1107,6 +1163,8 @@ def main():
 </html>"""
 
     users = {}
+
+    migrate_old_output(paths)
 
     # Make a folder to copy the images and videos into.
     os.makedirs(paths.dir_output_media, exist_ok=True)
