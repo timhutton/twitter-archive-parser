@@ -140,6 +140,25 @@ def extract_username(paths):
     return account[0]['account']['username']
 
 
+def escape_markdown(input_text: str) -> str:
+    """
+    Escape markdown control characters from input text so that the text will not break in rendered markdown.
+    (Only use on unformatted text parts that do not yet have any markdown control characters added on purpose!)
+    """
+    characters_to_escape: str = r"\_*[]()~`>#+-=|{}.!"
+    output_text: str = ''
+    for char in input_text:
+        if char in characters_to_escape:
+            # add backslash before control char
+            output_text = output_text + "\\" + char
+        elif char == '\n':
+            # add double space before line break
+            output_text = output_text + "  " + char
+        else:
+            output_text = output_text + char
+    return output_text
+
+
 def convert_tweet(tweet, username, media_sources, users, paths):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     if 'tweet' in tweet.keys():
@@ -172,11 +191,12 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                 body_markdown = body_markdown.replace(url['url'], expanded_url)
                 expanded_url_html = f'<a href="{expanded_url}">{expanded_url}</a>'
                 body_html = body_html.replace(url['url'], expanded_url_html)
-    # if the tweet is a reply, construct a header that links the names of the accounts being replied to the tweet being replied to
+    # if the tweet is a reply, construct a header that links the names
+    # of the accounts being replied to the tweet being replied to
     header_markdown = ''
     header_html = ''
     if 'in_reply_to_status_id' in tweet:
-        # match and remove all occurences of '@username ' at the start of the body
+        # match and remove all occurrences of '@username ' at the start of the body
         replying_to = re.match(r'^(@[0-9A-Za-z_]* )*', body_markdown)[0]
         if replying_to:
             body_markdown = body_markdown[len(replying_to):]
@@ -191,8 +211,10 @@ def convert_tweet(tweet, username, media_sources, users, paths):
         name_list = ', '.join(names[:-1]) + (f' and {names[-1]}' if len(names) > 1 else names[0])
         in_reply_to_status_id = tweet['in_reply_to_status_id']
         replying_to_url = f'https://twitter.com/{in_reply_to_screen_name}/status/{in_reply_to_status_id}'
-        header_markdown += f'Replying to [{name_list}]({replying_to_url})\n\n'
+        header_markdown += f'Replying to [{escape_markdown(name_list)}]({replying_to_url})\n\n'
         header_html += f'Replying to <a href="{replying_to_url}">{name_list}</a><br>'
+    # escape tweet body for markdown rendering:
+    body_markdown = escape_markdown(body_markdown)
     # replace image URLs with image links to local files
     if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
         original_url = tweet['entities']['media'][0]['url']
@@ -206,7 +228,7 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                 archive_media_path = os.path.join(paths.dir_input_media, archive_media_filename)
                 file_output_media = os.path.join(paths.dir_output_media, archive_media_filename)
                 media_url = f'{os.path.split(paths.dir_output_media)[1]}/{archive_media_filename}'
-                markdown += '' if not markdown and body_markdown == original_url else '\n\n'
+                markdown += '' if not markdown and body_markdown == escape_markdown(original_url) else '\n\n'
                 html += '' if not html and body_html == original_url else '<br>'
                 if os.path.isfile(archive_media_path):
                     # Found a matching image, use this one
@@ -248,7 +270,7 @@ def convert_tweet(tweet, username, media_sources, users, paths):
                         print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
                         html += f'<a href="{original_url}">{original_url}</a>'
-        body_markdown = body_markdown.replace(original_url, markdown)
+        body_markdown = body_markdown.replace(escape_markdown(original_url), markdown)
         body_html = body_html.replace(original_url, html)
     # make the body a quote
     body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
