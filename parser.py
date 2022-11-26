@@ -1151,18 +1151,24 @@ def main():
     # give the user a choice if followers should be included in the lookup
     # (but only in case they make up a large amount):
     unknown_collected_user_ids: set = set(collected_user_ids).difference(users.keys())
-    if len(unknown_collected_user_ids) > 10000:
-        unknown_follower_user_ids: set = unknown_collected_user_ids.intersection(collected_user_ids_only_in_followers)
-        if len(unknown_follower_user_ids) > 5000:
-            # Account metadata observed at ~2.1KB on average.
-            estimated_follower_lookup_size = int(2.1 * len(unknown_follower_user_ids))
-            user_input = input(f'{len(unknown_follower_user_ids)} of the {len(unknown_collected_user_ids)} '
-                               f'user IDs with unknown handles are from your followers. Online lookup would be '
-                               f'about {estimated_follower_lookup_size:,} KB smaller without them.\n'
-                               f'Do you want to include handles of your followers '
-                               f'in the online lookup of user handles? [Y/n]')
-            if user_input.lower() in ['n', 'no']:
-                collected_user_ids = collected_user_ids_without_followers
+    unknown_follower_user_ids: set = unknown_collected_user_ids.intersection(collected_user_ids_only_in_followers)
+    if len(unknown_follower_user_ids) > 5000:
+        # Account metadata observed at ~2.1KB on average.
+        estimated_follower_lookup_size = int(2.1 * len(unknown_follower_user_ids))
+        # we can look up at least 3000 users per minute.
+        estimated_max_follower_lookup_time_in_minutes = len(unknown_follower_user_ids) / 3000
+        print(
+            f'For some user IDs, the @handle is not included in the archive data. '
+            f'Unknown user handles can be looked up online.'
+            f'{len(unknown_follower_user_ids)} of {len(unknown_collected_user_ids)} total '
+            f'user IDs with unknown handles are from your followers. Online lookup would be '
+            f'about {estimated_follower_lookup_size:,} KB smaller and up to '
+            f'{estimated_max_follower_lookup_time_in_minutes:.1f} minutes faster without them.\n'
+        )
+        user_input = input(f'Do you want to include handles of your followers '
+                           f'in the online lookup of user handles anyway? [Y/n]')
+        if user_input.lower() in ['n', 'no']:
+            collected_user_ids = collected_user_ids_without_followers
 
     lookup_users(collected_user_ids, users)
 
