@@ -46,14 +46,38 @@ class UserData:
         self.handle = handle
 
 
+def get_consent(prompt: str, default_to_yes: bool = False):
+    """Asks the user for consent, using the given prompt. Accepts various versions of yes/no, or 
+    an empty answer to accept the default. The default is 'no' unless default_to_yes is passed as 
+    True. The default will be indicated automatically. For unacceptable answers, the user will 
+    be asked again."""
+    if default_to_yes:
+        suffix = " [Y/n]"
+        default_answer = "yes"
+    else:
+        suffix = " [y/N]"
+        default_answer = "no"
+    while True:
+        user_input = input(prompt + suffix)
+        if user_input == "":
+            print (f"Your empty response was assumed to mean '{default_answer}' (the default for this question).")
+            return default_to_yes
+        if user_input.lower() in ('y', 'yes'):
+            return True
+        if user_input.lower() in ('n', 'no'):
+            return False
+        print (f"Sorry, did not understand. Please answer with y, n, yes, no, or press enter to accept "
+            f"the default (which is '{default_answer}' in this case, as indicated by the uppercase "
+            f"'{default_answer.upper()[0]}'.)")
+
+
 def import_module(module):
     """Imports a module specified by a string. Example: requests = import_module('requests')"""
     try:
         return importlib.import_module(module)
     except ImportError:
         print(f'\nError: This script uses the "{module}" module which is not installed.\n')
-        user_input = input('OK to install using pip? [y/n]')
-        if not user_input.lower() in ('y', 'yes'):
+        if not get_consent('OK to install using pip?'):
             exit()
         subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
         return importlib.import_module(module)
@@ -102,9 +126,9 @@ def lookup_users(user_ids, users):
     # Account metadata observed at ~2.1KB on average.
     estimated_size = int(2.1 * len(filtered_user_ids))
     print(f'{len(filtered_user_ids)} users are unknown.')
-    user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
-    if user_input.lower() not in ('y', 'yes'):
+    if not get_consent(f'Download user data from Twitter (approx {estimated_size:,}KB)?'):
         return
+
     requests = import_module('requests')
     try:
         with requests.Session() as session:
@@ -1084,9 +1108,9 @@ def main():
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
     print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
-    print(f'before starting the download.')
-    user_input = input('\nOK to start downloading? [y/n]')
-    if user_input.lower() in ('y', 'yes'):
+    print(f'before starting the download.\n')
+
+    if get_consent('OK to start downloading?'):
         download_larger_media(media_sources, paths)
         print('In case you set your account to public before initiating the download, do not forget to protect it again.')
 
