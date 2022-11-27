@@ -1550,13 +1550,13 @@ def migrate_old_output(paths: PathConfig):
         print("which were probably generated from an older version of this script.")
         print("Since then, the directory layout of twitter-archive-parser has changed")
         print("and these files are generated into the sub-directory 'parser-output' or")
-        print("various sub-sub-directories therein. These are the affected files:")
+        print("various sub-sub-directories therein. These are the affected files:\n")
 
         for file_to_delete in files_to_delete:
             print(file_to_delete)
 
-        user_input = input('\nOK delete these files? (If the the directory layout would not have changed, they would be overwritten anyway) [y/N]')
-        if user_input.lower() in ('y', 'yes'):
+        print()
+        if get_consent('OK to delete these files? (If the the directory layout would not have changed, they would be overwritten anyway)'):
             for file_to_delete in files_to_delete:
                 os.remove(file_to_delete)
             print(f"Files have been deleted. New versions of these files will be generated into 'parser-output' soon.")
@@ -1648,16 +1648,17 @@ def main():
     parse_group_direct_messages(username, users, user_id_url_template, paths)
 
     # Download larger images, if the user agrees
-    print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
-    print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
-    print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
-    print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
-    print(f'before starting the download.\n')
+    if len(media_sources) > 0:
+        print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
+        print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
+        print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
+        print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
+        print(f'before starting the download.\n')
 
-    if get_consent('OK to start downloading?'):
-        download_larger_media(media_sources, paths)
-        print('In case you set your account to public before initiating the download, '
-              'do not forget to protect it again.')
+        if get_consent('OK to start downloading {len(media_sources)} media files?'):
+            download_larger_media(media_sources, log_path)
+            print('In case you set your account to public before initiating the download, '
+                'do not forget to protect it again.')
 
 
 if __name__ == "__main__":
