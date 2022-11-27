@@ -64,7 +64,8 @@ class PathConfig:
         # check if user is in correct folder
         if not os.path.isfile(self.file_account_js):
             print(
-                f'Error: Failed to load {self.file_account_js}. Start this script in the root folder of your Twitter archive.')
+                f'Error: Failed to load {self.file_account_js}. '
+                f'Start this script in the root folder of your Twitter archive.')
             exit()
 
         self.dir_input_media                = find_dir_input_media(self.dir_input_data)
@@ -82,20 +83,46 @@ class PathConfig:
         # structured like an actual tweet output file, can be used to compute relative urls to a media file
         self.example_file_output_tweets = self.create_path_for_file_output_tweets(year=2020, month=12)
 
-    def create_path_for_file_output_tweets(self, year, month, format="html", kind="tweets")->str:
+    def create_path_for_file_output_tweets(self, year, month, format="html", kind="tweets") -> str:
         """Builds the path for a tweet-archive file based on some properties."""
+        # Previously the filename was f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}'
         return os.path.join(self.dir_output, f"{kind}-{format}", f"{year:04}", f"{year:04}-{month:02}-01-{kind}.{format}")
 
-    def create_path_for_file_output_dms(self, name, index=None, format="html", kind="DMs")->str:
+    def create_path_for_file_output_dms(self, name, index=None, format="html", kind="DMs") -> str:
         """Builds the path for a dm-archive file based on some properties."""
         index_suffix = ""
         if (index):
-            index_suffix = f"-part{index:02}"
+            index_suffix = f"-part{index:03}"
         return os.path.join(self.dir_output, kind, f"{kind}-{name}{index_suffix}.{format}")
 
     def create_path_for_file_output_single(self, format: str, kind: str)->str:
         """Builds the path for a single output file which, i.e. one that is not part of a larger group or sequence."""
         return os.path.join(self.dir_output, f"{kind}.{format}")
+
+
+def get_consent(prompt: str, default_to_yes: bool = False):
+    """Asks the user for consent, using the given prompt. Accepts various versions of yes/no, or 
+    an empty answer to accept the default. The default is 'no' unless default_to_yes is passed as 
+    True. The default will be indicated automatically. For unacceptable answers, the user will 
+    be asked again."""
+    if default_to_yes:
+        suffix = " [Y/n]"
+        default_answer = "yes"
+    else:
+        suffix = " [y/N]"
+        default_answer = "no"
+    while True:
+        user_input = input(prompt + suffix)
+        if user_input == "":
+            print (f"Your empty response was assumed to mean '{default_answer}' (the default for this question).")
+            return default_to_yes
+        if user_input.lower() in ('y', 'yes'):
+            return True
+        if user_input.lower() in ('n', 'no'):
+            return False
+        print (f"Sorry, did not understand. Please answer with y, n, yes, no, or press enter to accept "
+            f"the default (which is '{default_answer}' in this case, as indicated by the uppercase "
+            f"'{default_answer.upper()[0]}'.)")
 
 
 def import_module(module):
@@ -104,8 +131,7 @@ def import_module(module):
         return importlib.import_module(module)
     except ImportError:
         print(f'\nError: This script uses the "{module}" module which is not installed.\n')
-        user_input = input('OK to install using pip? [y/n]')
-        if not user_input.lower() in ('y', 'yes'):
+        if not get_consent('OK to install using pip?'):
             exit()
         subprocess.run([sys.executable, '-m', 'pip', 'install', module], check=True)
         return importlib.import_module(module)
@@ -172,9 +198,9 @@ def lookup_users(user_ids, users):
     # Account metadata observed at ~2.1KB on average.
     estimated_size = int(2.1 * len(filtered_user_ids))
     print(f'{len(filtered_user_ids)} users are unknown.')
-    user_input = input(f'Download user data from Twitter (approx {estimated_size:,}KB)? [y/n]')
-    if user_input.lower() not in ('y', 'yes'):
+    if not get_consent(f'Download user data from Twitter (approx {estimated_size:,} KB)?'):
         return
+
     requests = import_module('requests')
     try:
         with requests.Session() as session:
@@ -183,6 +209,7 @@ def lookup_users(user_ids, users):
             retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
             for user_id, user in retrieved_users.items():
                 users[user_id] = UserData(user_id, user["screen_name"])
+        print()  # empty line for better readability of output
     except Exception as err:
         print(f'Failed to download user data: {err}')
 
@@ -235,7 +262,8 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
     timestamp_str = tweet['created_at']
-    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp())) # Example: Tue Mar 19 14:05:17 +0000 2019
+    timestamp = int(round(datetime.datetime.strptime(timestamp_str, '%a %b %d %X %z %Y').timestamp()))
+    # Example: Tue Mar 19 14:05:17 +0000 2019
     body_markdown = tweet['full_text']
     body_html = tweet['full_text']
     tweet_id_str = tweet['id_str']
@@ -243,17 +271,22 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     # added to the urls entities list so that we can build correct links later on.
     if 'entities' in tweet and 'media' not in tweet['entities'] and len(tweet['entities'].get("urls", [])) == 0:
         for word in tweet['full_text'].split():
-            url = urlparse(word)
-            if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
-                # Shorten links similiar to twitter
-                netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
-                path_short = url.path if len(url.path + '?' + url.query) < 15 else (url.path + '?' + url.query)[:15] + '\u2026'
-                tweet['entities']['urls'].append({
-                    'url': word,
-                    'expanded_url': word,
-                    'display_url': netloc_short + path_short,
-                    'indices': [tweet['full_text'].index(word), tweet['full_text'].index(word) + len(word)],
-                })
+            try:
+                url = urlparse(word)
+            except ValueError:
+                pass  # don't crash when trying to parse something that looks like a URL but actually isn't
+            else:
+                if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
+                    # Shorten links similar to twitter
+                    netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
+                    path_short = url.path if len(url.path + '?' + url.query) < 15 \
+                        else (url.path + '?' + url.query)[:15] + '\u2026'
+                    tweet['entities']['urls'].append({
+                        'url': word,
+                        'expanded_url': word,
+                        'display_url': netloc_short + path_short,
+                        'indices': [tweet['full_text'].index(word), tweet['full_text'].index(word) + len(word)],
+                    })
     # replace t.co URLs with their original versions
     if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
@@ -287,7 +320,8 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     # escape tweet body for markdown rendering:
     body_markdown = escape_markdown(body_markdown)
     # replace image URLs with image links to local files
-    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet and 'media' in tweet['extended_entities']:
+    if 'entities' in tweet and 'media' in tweet['entities'] and 'extended_entities' in tweet \
+            and 'media' in tweet['extended_entities']:
         original_url = tweet['entities']['media'][0]['url']
         markdown = ''
         html = ''
@@ -309,7 +343,9 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
                     html += f'<img src="{media_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.append((os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url))
+                    media_sources.append(
+                        (os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url)
+                    )
                 else:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(paths.dir_input_media, tweet_id_str + '*'))
@@ -320,9 +356,12 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
                             media_url = rel_url(file_output_media, paths.example_file_output_tweets)
                             if not os.path.isfile(file_output_media):
                                 shutil.copy(archive_media_path, file_output_media)
-                            markdown += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
-                            html += f'<video controls><source src="{media_url}">Your browser does not support the video tag.</video>\n'
-                            # Save the online location of the best-quality version of this file, for later upgrading if wanted
+                            markdown += f'<video controls><source src="{media_url}">Your browser ' \
+                                        f'does not support the video tag.</video>\n'
+                            html += f'<video controls><source src="{media_url}">Your browser ' \
+                                    f'does not support the video tag.</video>\n'
+                            # Save the online location of the best-quality version of this file,
+                            # for later upgrading if wanted
                             if 'video_info' in media and 'variants' in media['video_info']:
                                 best_quality_url = ''
                                 best_bitrate = -1 # some valid videos are marked with bitrate=0 in the JSON
@@ -333,12 +372,17 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
                                             best_quality_url = variant['url']
                                             best_bitrate = bitrate
                                 if best_bitrate == -1:
-                                    print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
+                                    print(f"Warning No URL found for {original_url} {original_expanded_url} "
+                                          f"{archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.append((os.path.join(paths.dir_output_media, archive_media_filename), best_quality_url))
+                                    media_sources.append(
+                                        (os.path.join(paths.dir_output_media, archive_media_filename),
+                                         best_quality_url)
+                                    )
                     else:
-                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
+                        print(f'Warning: missing local file: {archive_media_path}. Using original link instead: '
+                              f'{original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
                         html += f'<a href="{original_url}">{original_url}</a>'
         body_markdown = body_markdown.replace(escape_markdown(original_url), markdown)
@@ -349,8 +393,10 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     # append the original Twitter URL as a link
     original_tweet_url = f'https://twitter.com/{username}/status/{tweet_id_str}'
     icon_url = rel_url(paths.file_tweet_icon, paths.example_file_output_tweets) 
-    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{icon_url}" width="12" /> [{timestamp_str}]({original_tweet_url})'
-    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{icon_url}" width="12" />&nbsp;{timestamp_str}</a></p>'
+    body_markdown = header_markdown + body_markdown + f'\n\n<img src="{icon_url}" width="12" /> ' \
+                                                      f'[{timestamp_str}]({original_tweet_url})'
+    body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{icon_url}" ' \
+                                          f'width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
     if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
         id = tweet['in_reply_to_user_id']
@@ -368,7 +414,8 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
 
 
 def find_files_input_tweets(dir_path_input_data):
-    """Identify the tweet archive's file and folder names - they change slightly depending on the archive size it seems."""
+    """Identify the tweet archive's file and folder names -
+    they change slightly depending on the archive size it seems."""
     input_tweets_file_templates = ['tweet.js', 'tweets.js', 'tweets-part*.js']
     files_paths_input_tweets = []
     for input_tweets_file_template in input_tweets_file_templates:
@@ -411,11 +458,13 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
     try:
         with requests.get(url, stream=True, timeout=2) as res:
             if not res.status_code == 200:
-                # Try to get content of response as `res.text`. For twitter.com, this will be empty in most (all?) cases.
+                # Try to get content of response as `res.text`.
+                # For twitter.com, this will be empty in most (all?) cases.
                 # It is successfully tested with error responses from other domains.
-                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". Response content: "{res.text}"')
+                raise Exception(f'Download failed with status "{res.status_code} {res.reason}". '
+                                f'Response content: "{res.text}"')
             byte_size_after = int(res.headers['content-length'])
-            if (byte_size_after != byte_size_before):
+            if byte_size_after != byte_size_before:
                 # Proceed with the full download
                 tmp_filename = filename+'.tmp'
                 print(f'{pref}Downloading {url}...            ', end='\r')
@@ -427,30 +476,32 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
                 pixels_before, pixels_after = width_before * height_before, width_after * height_after
                 pixels_percentage_increase = 100.0 * (pixels_after - pixels_before) / pixels_before
 
-                if (width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1):
+                if width_before == -1 and height_before == -1 and width_after == -1 and height_after == -1:
                     # could not check size of both versions, probably a video or unsupported image format
                     os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
                     logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% '
                                  f'larger in bytes (pixel comparison not possible). {post}')
                     return True, byte_size_after
-                elif (width_before == -1 or height_before == -1 or width_after == -1 or height_after == -1):
+                elif width_before == -1 or height_before == -1 or width_after == -1 or height_after == -1:
                     # could not check size of one version, this should not happen (corrupted download?)
                     logging.info(f'{pref}SKIPPED. Pixel size comparison inconclusive: '
                                  f'{width_before}*{height_before}px vs. {width_after}*{height_after}px. {post}')
                     return False, byte_size_after
-                elif (pixels_after >= pixels_before):
+                elif pixels_after >= pixels_before:
                     os.replace(tmp_filename, filename)
                     bytes_percentage_increase = 100.0 * (byte_size_after - byte_size_before) / byte_size_before
-                    if (bytes_percentage_increase >= 0):
+                    if bytes_percentage_increase >= 0:
                         logging.info(f'{pref}SUCCESS. New version is {bytes_percentage_increase:3.0f}% larger in bytes '
-                                    f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                                     f'and {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
                     else:
-                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% smaller in bytes '
-                                f'but {pixels_percentage_increase:3.0f}% larger in pixels. {post}')
+                        logging.info(f'{pref}SUCCESS. New version is actually {-bytes_percentage_increase:3.0f}% '
+                                     f'smaller in bytes but {pixels_percentage_increase:3.0f}% '
+                                     f'larger in pixels. {post}')
                     return True, byte_size_after
                 else:
-                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% smaller pixel size. {post}')
+                    logging.info(f'{pref}SKIPPED. Online version has {-pixels_percentage_increase:3.0f}% '
+                                 f'smaller pixel size. {post}')
                     return True, byte_size_after
             else:
                 logging.info(f'{pref}SKIPPED. Online version is same byte size, assuming same content. Not downloaded.')
@@ -481,20 +532,50 @@ def download_larger_media(media_sources, paths: PathConfig):
         success_count = 0
         retries = []
         for index, (local_media_path, media_url) in enumerate(media_sources):
-            success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
+            success, bytes_downloaded = download_file_if_larger(
+                media_url, local_media_path, index + 1, number_of_files, sleep_time
+            )
             if success:
                 success_count += 1
             else:
                 retries.append((local_media_path, media_url))
             total_bytes_downloaded += bytes_downloaded
+
+            # show % done and estimated remaining time:
+            time_elapsed: float = time.time() - start_time
+            estimated_time_per_file: float = time_elapsed / (index + 1)
+            estimated_time_remaining: datetime.datetime = \
+                datetime.datetime.fromtimestamp(
+                    (number_of_files - (index + 1)) * estimated_time_per_file,
+                    tz=datetime.timezone.utc
+                )
+            if estimated_time_remaining.hour >= 1:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.hour} hour{'' if estimated_time_remaining.hour == 1 else 's'} " \
+                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'}"
+            elif estimated_time_remaining.minute >= 1:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'} " \
+                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
+            else:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
+
+            if index + 1 == number_of_files:
+                print('    100 % done.')
+            else:
+                print(f'    {(100*(index+1)/number_of_files):.1f} % done, about {time_remaining_string} remaining...')
+
         media_sources = retries
         remaining_tries -= 1
         sleep_time += 2
-        logging.info(f'\n{success_count} of {number_of_files} tested media files are known to be the best-quality available.\n')
+        logging.info(f'\n{success_count} of {number_of_files} tested media files '
+                     f'are known to be the best-quality available.\n')
         if len(retries) == 0:
             break
         if remaining_tries > 0:
-            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. {remaining_tries} tries remaining.\n')
+            print(f'----------------------\n\nRetrying the ones that failed, with a longer sleep. '
+                  f'{remaining_tries} tries remaining.\n')
     end_time = time.time()
 
     logging.info(f'Total downloaded: {total_bytes_downloaded/2**20:.1f}MB = {total_bytes_downloaded/2**30:.2f}GB')
@@ -525,7 +606,7 @@ def parse_tweets(username, users, html_template, paths: PathConfig):
 
     for (year, month), content in grouped_tweets.items():
         # Write into *.md files
-        md_string =  '\n\n----\n\n'.join(md for md, _ in content)
+        md_string = '\n\n----\n\n'.join(md for md, _ in content)
         md_path = paths.create_path_for_file_output_tweets(year, month, format="md")
         with open_and_mkdirs(md_path) as f:
             f.write(md_string)
@@ -536,14 +617,29 @@ def parse_tweets(username, users, html_template, paths: PathConfig):
         with open_and_mkdirs(html_path) as f:
             f.write(html_template.format(html_string))
 
-    print(f'Wrote {len(tweets)} tweets to *.md and *.html, with images and video embedded from {paths.dir_output_media}')
+    print(f'Wrote {len(tweets)} tweets to *.md and *.html, '
+          f'with images and video embedded from {paths.dir_output_media}')
 
     return media_sources
 
 
-def parse_followings(users, URL_template_user_id, paths: PathConfig):
+def collect_user_ids_from_followings(paths) -> list:
+    """
+     Collect all user ids that appear in the followings archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
+    following_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'following.js'))
+    # collect all user ids in a list
+    following_ids = []
+    for follow in following_json:
+        if 'following' in follow and 'accountId' in follow['following']:
+            following_ids.append(follow['following']['accountId'])
+    return following_ids
+
+
+def parse_followings(users, user_id_url_template, paths: PathConfig):
     """Parse paths.dir_input_data/following.js, write to paths.file_output_following.
-       Query Twitter API for the missing user handles, if the user agrees.
     """
     following = []
     following_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'following.js'))
@@ -551,10 +647,9 @@ def parse_followings(users, URL_template_user_id, paths: PathConfig):
     for follow in following_json:
         if 'following' in follow and 'accountId' in follow['following']:
             following_ids.append(follow['following']['accountId'])
-    lookup_users(following_ids, users)
-    for id in following_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        following.append(handle + ' ' + URL_template_user_id.format(id))
+    for following_id in following_ids:
+        handle = users[following_id].handle if following_id in users else '~unknown~handle~'
+        following.append(handle + ' ' + user_id_url_template.format(following_id))
     following.sort()
     following_output_path = paths.create_path_for_file_output_single(format="txt", kind="following")
     with open_and_mkdirs(following_output_path) as f:
@@ -562,9 +657,23 @@ def parse_followings(users, URL_template_user_id, paths: PathConfig):
     print(f"Wrote {len(following)} accounts to {following_output_path}")
 
 
-def parse_followers(users, URL_template_user_id, paths: PathConfig):
+def collect_user_ids_from_followers(paths) -> list:
+    """
+     Collect all user ids that appear in the followers archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
+    follower_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'follower.js'))
+    # collect all user ids in a list
+    follower_ids = []
+    for follower in follower_json:
+        if 'follower' in follower and 'accountId' in follower['follower']:
+            follower_ids.append(follower['follower']['accountId'])
+    return follower_ids
+
+
+def parse_followers(users, user_id_url_template, paths: PathConfig):
     """Parse paths.dir_input_data/followers.js, write to paths.file_output_followers.
-       Query Twitter API for the missing user handles, if the user agrees.
     """
     followers = []
     follower_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'follower.js'))
@@ -572,10 +681,9 @@ def parse_followers(users, URL_template_user_id, paths: PathConfig):
     for follower in follower_json:
         if 'follower' in follower and 'accountId' in follower['follower']:
             follower_ids.append(follower['follower']['accountId'])
-    lookup_users(follower_ids, users)
-    for id in follower_ids:
-        handle = users[id].handle if id in users else '~unknown~handle~'
-        followers.append(handle + ' ' + URL_template_user_id.format(id))
+    for follower_id in follower_ids:
+        handle = users[follower_id].handle if follower_id in users else '~unknown~handle~'
+        followers.append(handle + ' ' + user_id_url_template.format(follower_id))
     followers.sort()
     followers_output_path = paths.create_path_for_file_output_single(format="txt", kind="followers")
     with open_and_mkdirs(followers_output_path) as f:
@@ -589,21 +697,30 @@ def chunks(lst: list, n: int):
         yield lst[i:i + n]
 
 
-def parse_direct_messages(username, users, URL_template_user_id, paths: PathConfig):
-    """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
-       Query Twitter API for the missing user handles, if the user agrees.
+def collect_user_ids_from_direct_messages(paths) -> list:
     """
-    # Scan the DMs for missing user handles
+     Collect all user ids that appear in the direct messages archive data.
+     (For use in bulk online lookup from Twitter.)
+    """
+    # read JSON file from archive
     dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages.js'))
-    dm_user_ids = set()
+    # collect all user ids in a set
+    dms_user_ids = set()
     for conversation in dms_json:
         if 'dmConversation' in conversation and 'conversationId' in conversation['dmConversation']:
             dm_conversation = conversation['dmConversation']
             conversation_id = dm_conversation['conversationId']
             user1_id, user2_id = conversation_id.split('-')
-            dm_user_ids.add(user1_id)
-            dm_user_ids.add(user2_id)
-    lookup_users(list(dm_user_ids), users)
+            dms_user_ids.add(user1_id)
+            dms_user_ids.add(user2_id)
+    return list(dms_user_ids)
+
+
+def parse_direct_messages(username, users, user_id_url_template, paths: PathConfig):
+    """Parse paths.dir_input_data/direct-messages.js, write to one markdown file per conversation.
+    """
+    # read JSON file
+    dms_json = read_json_from_js_file(os.path.join(paths.dir_input_data, 'direct-messages.js'))
 
     # Parse the DMs and store the messages in a dict
     conversations_messages = defaultdict(list)
@@ -627,6 +744,8 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # escape message body for markdown rendering:
+                            body_markdown = escape_markdown(body)
                             # replace image URLs with image links to local files
                             if 'mediaUrls' in message_create \
                                     and len(message_create['mediaUrls']) == 1 \
@@ -644,7 +763,9 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
                                     if not os.path.isfile(new_url):
                                         shutil.copy(archive_media_path, new_url)
                                     image_markdown = f'\n![]({new_url})\n'
-                                    body = body.replace(original_expanded_url, image_markdown)
+                                    body_markdown = body_markdown.replace(
+                                        escape_markdown(original_expanded_url), image_markdown
+                                    )
 
                                     # Save the online location of the best-quality version of this file,
                                     # for later upgrading if wanted
@@ -675,7 +796,9 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
                                                 shutil.copy(archive_media_path, media_url)
                                             video_markdown = f'\n<video controls><source src="{media_url}">' \
                                                              f'Your browser does not support the video tag.</video>\n'
-                                            body = body.replace(original_expanded_url, video_markdown)
+                                            body_markdown = body_markdown.replace(
+                                                escape_markdown(original_expanded_url), video_markdown
+                                            )
 
                                     # TODO: maybe  also save the online location of the best-quality version for videos?
                                     #  (see above)
@@ -688,13 +811,15 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
 
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
-                                else URL_template_user_id.format(from_id)
-                            to_handle = users[to_id].handle.replace('_', '\\_') if to_id in users \
-                                else URL_template_user_id.format(to_id)
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
+                                else user_id_url_template.format(from_id)
+                            to_handle = escape_markdown(users[to_id].handle) if to_id in users \
+                                else user_id_url_template.format(to_id)
 
-                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
-                                               f'({created_at}) ###\n```\n{body}\n```'
+                            # make the body a quote
+                            body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
+                            message_markdown = f'{from_handle} -> {to_handle}: ({created_at}) \n\n' \
+                                               f'{body_markdown}'
                             messages.append((timestamp, message_markdown))
 
             # find identifier for the conversation
@@ -710,12 +835,12 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
         # sort messages by timestamp
         messages.sort(key=lambda tup: tup[0])
 
-        other_user_name = users[other_user_id].handle.replace('_', '\\_') if other_user_id in users \
-            else URL_template_user_id.format(other_user_id)
+        other_user_name = escape_markdown(users[other_user_id].handle) if other_user_id in users \
+            else user_id_url_template.format(other_user_id)
 
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
 
-        escaped_username = username.replace('_', '\\_')
+        escaped_username = escape_markdown(username)
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
         # following this standard, also split up longer conversations in the output files:
@@ -723,9 +848,9 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'## Conversation between {escaped_username} and {other_user_name}, ' \
-                            f'part {chunk_index+1}: ##\n'
-                markdown += ''.join(md for _, md in chunk)
+                markdown += f'### Conversation between {escaped_username} and {other_user_name}, ' \
+                            f'part {chunk_index+1}: ###\n\n----\n\n'
+                markdown += '\n\n----\n\n'.join(md for _, md in chunk)
                 conversation_output_path = paths.create_path_for_file_output_dms(name=other_user_short_name, index=(chunk_index + 1), format="md")
 
                 # write part to a markdown file
@@ -736,8 +861,8 @@ def parse_direct_messages(username, users, URL_template_user_id, paths: PathConf
 
         else:
             markdown = ''
-            markdown += f'## Conversation between {escaped_username} and {other_user_name}: ##\n'
-            markdown += ''.join(md for _, md in messages)
+            markdown += f'### Conversation between {escaped_username} and {other_user_name}: ###\n\n----\n\n'
+            markdown += '\n\n----\n\n'.join(md for _, md in messages)
             conversation_output_path = paths.create_path_for_file_output_dms(name=other_user_short_name, format="md")
 
             with open_and_mkdirs(conversation_output_path) as f:
@@ -853,6 +978,8 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # escape message body for markdown rendering:
+                            body_markdown = escape_markdown(body)
                             # replace image URLs with image links to local files
                             if 'mediaUrls' in message_create \
                                     and len(message_create['mediaUrls']) == 1 \
@@ -871,7 +998,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                     if not os.path.isfile(new_url):
                                         shutil.copy(archive_media_path, new_url)
                                     image_markdown = f'\n![]({new_url})\n'
-                                    body = body.replace(original_expanded_url, image_markdown)
+                                    body_markdown = body_markdown.replace(
+                                        escape_markdown(original_expanded_url), image_markdown
+                                    )
 
                                     # Save the online location of the best-quality version of this file,
                                     # for later upgrading if wanted
@@ -904,7 +1033,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                                 shutil.copy(archive_media_path, media_url)
                                             video_markdown = f'\n<video controls><source src="{media_url}">' \
                                                              f'Your browser does not support the video tag.</video>\n'
-                                            body = body.replace(original_expanded_url, video_markdown)
+                                            body_markdown = body_markdown.replace(
+                                                escape_markdown(original_expanded_url), video_markdown
+                                            )
 
                                     # TODO: maybe  also save the online location of the best-quality version for videos?
                                     #  (see above)
@@ -916,22 +1047,25 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n```\n{body}\n```'
+                            # make the body a quote
+                            body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
+                            message_markdown = f'{from_handle}: ({created_at})\n\n' \
+                                               f'{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "conversationNameUpdate" in message:
                         conversation_name_update = message['conversationNameUpdate']
                         if all(tag in conversation_name_update for tag in ['initiatingUserId', 'name', 'createdAt']):
                             from_id = conversation_name_update['initiatingUserId']
-                            body = f"_changed group name to: {conversation_name_update['name']}_"
+                            body_markdown = f"_changed group name to: {escape_markdown(conversation_name_update['name'])}_"
                             created_at = conversation_name_update['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                             # save metadata about name change:
                             group_conversations_metadata[conversation_id]['conversation_names'].append(
@@ -945,11 +1079,11 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            escaped_username = username.replace('_', '\\_')
-                            body = f'_{from_handle} added {escaped_username} to the group_'
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            escaped_username = escape_markdown(username)
+                            body_markdown = f'_{from_handle} added {escaped_username} to the group_'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "participantsJoin" in message:
                         participants_join = message['participantsJoin']
@@ -959,16 +1093,16 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
                             joined_ids = participants_join['userIds']
-                            joined_handles = [users[joined_id].handle.replace('_', '\\_') if joined_id in users
+                            joined_handles = [escape_markdown(users[joined_id].handle) if joined_id in users
                                               else user_id_url_template.format(joined_id) for joined_id in joined_ids]
                             name_list = ', '.join(joined_handles[:-1]) + \
                                         (f' and {joined_handles[-1]}' if len(joined_handles) > 1 else
                                          joined_handles[0])
-                            body = f'_{from_handle} added {name_list} to the group_'
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            body_markdown = f'_{from_handle} added {name_list} to the group_'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "participantsLeave" in message:
                         participants_leave = message['participantsLeave']
@@ -978,13 +1112,13 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
                             left_ids = participants_leave['userIds']
-                            left_handles = [users[left_id].handle.replace('_', '\\_') if left_id in users
+                            left_handles = [escape_markdown(users[left_id].handle) if left_id in users
                                             else user_id_url_template.format(left_id) for left_id in left_ids]
                             name_list = ', '.join(left_handles[:-1]) + \
                                         (f' and {left_handles[-1]}' if len(left_handles) > 1 else
                                          left_handles[0])
-                            body = f'_{name_list} left the group_'
-                            message_markdown = f'\n\n### {name_list}: ({created_at}) ###\n\n{body}\n'
+                            body_markdown = f'_{name_list} left the group_'
+                            message_markdown = f'{name_list}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
 
             # collect messages per conversation in group_conversations_messages dict
@@ -1041,7 +1175,7 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
         # create a list of names of the form '@name1, @name2 and @name3'
         # to use as a headline in the output file
         escaped_participant_names = [
-            participant_name.replace('_', '\\_')
+            escape_markdown(participant_name)
             for participant_name in group_conversations_metadata[conversation_id]['participant_names']
         ]
         name_list = ', '.join(escaped_participant_names[:-1]) + \
@@ -1052,9 +1186,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'# {official_name}\n'
-                markdown += f'## Group conversation between {name_list}, part {chunk_index + 1}: ##\n'
-                markdown += ''.join(md for _, md in chunk)
+                markdown += f'## {official_name} ##\n\n'
+                markdown += f'### Group conversation between {name_list}, part {chunk_index + 1}: ###\n\n----\n\n'
+                markdown += '\n\n----\n\n'.join(md for _, md in chunk)
                 conversation_output_filename = \
                     paths.file_template_group_dm_output.format(f'{group_name}_part{chunk_index + 1:03}')
 
@@ -1065,9 +1199,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                 num_written_files += 1
         else:
             markdown = ''
-            markdown += f'# {official_name}\n'
-            markdown += f'## Group conversation between {name_list}: ##\n'
-            markdown += ''.join(md for _, md in messages)
+            markdown += f'## {official_name} ##\n\n'
+            markdown += f'### Group conversation between {name_list}: ###\n\n----\n\n'
+            markdown += '\n\n----\n\n'.join(md for _, md in messages)
             conversation_output_filename = paths.file_template_group_dm_output.format(group_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
@@ -1086,8 +1220,9 @@ def migrate_old_output(paths: PathConfig):
     `paths.dir_output_media` and `paths.dir_output_cache`. Then deletes old output files 
     (md, html, txt) from the archive root, if the user consents."""
 
-    # Create new media folder, so we can potentially use it to move files there
+    # Create new folders, so we can potentially use them to move files there
     os.makedirs(paths.dir_output_media, exist_ok=True)
+    os.makedirs(paths.dir_output_cache, exist_ok=True)
 
     # Move files that we can re-use:
     if os.path.exists(os.path.join(paths.dir_archive, "media")):
@@ -1107,6 +1242,7 @@ def migrate_old_output(paths: PathConfig):
 
     # Delete files that would be overwritten anyway (if user consents):
     output_globs = [
+        "TweetArchive.html",
         "*Tweet-Archive*.html",
         "*Tweet-Archive*.md",
         "DMs-Archive-*.html",
@@ -1147,8 +1283,7 @@ def main():
     # Extract the archive owner's username from data/account.js
     username = extract_username(paths)
 
-    # URL config
-    URL_template_user_id = 'https://twitter.com/i/user/{}'
+    user_id_url_template = 'https://twitter.com/i/user/{}'
 
     html_template = """\
 <!doctype html>
@@ -1178,30 +1313,66 @@ def main():
         shutil.copy('assets/images/favicon.ico', paths.file_tweet_icon)
 
     media_sources = parse_tweets(username, users, html_template, paths)
-    parse_followings(users, URL_template_user_id, paths)
-    parse_followers(users, URL_template_user_id, paths)
-    parse_direct_messages(username, users, URL_template_user_id, paths)
 
-    # find user ids to look up from group dms
+    following_ids = collect_user_ids_from_followings(paths)
+    print(f'found {len(following_ids)} user IDs in followings.')
+    follower_ids = collect_user_ids_from_followers(paths)
+    print(f'found {len(follower_ids)} user IDs in followers.')
+    dms_user_ids = collect_user_ids_from_direct_messages(paths)
+    print(f'found {len(dms_user_ids)} user IDs in direct messages.')
     group_dms_user_ids = collect_user_ids_from_group_direct_messages(paths)
-    # TODO: separate the collecting of user ids out of the other parse* functions in the same way
-    #  and pool the lookups together before all of the other parsing & output generation
-    # look them up
-    lookup_users(group_dms_user_ids, users)
+    print(f'found {len(group_dms_user_ids)} user IDs in group direct messages.')
 
-    # parse the content of group dms and write to output files
-    parse_group_direct_messages(username, users, URL_template_user_id, paths)
+    # bulk lookup for user handles from followers, followings, direct messages and group direct messages
+    collected_user_ids_without_followers = list(
+        set(following_ids).union(set(dms_user_ids)).union(set(group_dms_user_ids))
+    )
+    collected_user_ids_only_in_followers: set = set(follower_ids).difference(set(collected_user_ids_without_followers))
+    collected_user_ids: list = list(set(collected_user_ids_without_followers)
+                                    .union(collected_user_ids_only_in_followers))
+
+    print(f'\nfound {len(collected_user_ids)} user IDs overall.')
+
+    # give the user a choice if followers should be included in the lookup
+    # (but only in case they make up a large amount):
+    unknown_collected_user_ids: set = set(collected_user_ids).difference(users.keys())
+    unknown_follower_user_ids: set = unknown_collected_user_ids.intersection(collected_user_ids_only_in_followers)
+    if len(unknown_follower_user_ids) > 5000:
+        # Account metadata observed at ~2.1KB on average.
+        estimated_follower_lookup_size = int(2.1 * len(unknown_follower_user_ids))
+        # we can look up at least 3000 users per minute.
+        estimated_max_follower_lookup_time_in_minutes = len(unknown_follower_user_ids) / 3000
+        print(
+            f'For some user IDs, the @handle is not included in the archive data. '
+            f'Unknown user handles can be looked up online.'
+            f'{len(unknown_follower_user_ids)} of {len(unknown_collected_user_ids)} total '
+            f'user IDs with unknown handles are from your followers. Online lookup would be '
+            f'about {estimated_follower_lookup_size:,} KB smaller and up to '
+            f'{estimated_max_follower_lookup_time_in_minutes:.1f} minutes faster without them.\n'
+        )
+
+        if not get_consent(f'Do you want to include handles of your followers '
+                           f'in the online lookup of user handles anyway?', default_to_yes=True):
+            collected_user_ids = collected_user_ids_without_followers
+
+    lookup_users(collected_user_ids, users)
+
+    parse_followings(users, user_id_url_template, paths)
+    parse_followers(users, user_id_url_template, paths)
+    parse_direct_messages(username, users, user_id_url_template, paths)
+    parse_group_direct_messages(username, users, user_id_url_template, paths)
 
     # Download larger images, if the user agrees
     print(f"\nThe archive doesn't contain the original-size images. We can attempt to download them from twimg.com.")
     print(f'Please be aware that this script may download a lot of data, which will cost you money if you are')
     print(f'paying for bandwidth. Please be aware that the servers might block these requests if they are too')
     print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
-    print(f'before starting the download.')
-    user_input = input('\nOK to start downloading? [y/n]')
-    if user_input.lower() in ('y', 'yes'):
+    print(f'before starting the download.\n')
+
+    if get_consent('OK to start downloading?'):
         download_larger_media(media_sources, paths)
-        print('In case you set your account to public before initiating the download, do not forget to protect it again.')
+        print('In case you set your account to public before initiating the download, '
+              'do not forget to protect it again.')
 
 
 if __name__ == "__main__":
