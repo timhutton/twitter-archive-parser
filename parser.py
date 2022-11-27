@@ -456,7 +456,7 @@ def collect_tweet_references(tweet, known_tweets, counts):
     # Collect previous tweets in conversation
     # Only do this for tweets from our original archive
     if 'from_archive' in tweet and has_path(tweet, ['in_reply_to_status_id_str']):
-        prev_tweet_id = parse_as_number(tweet['in_reply_to_status_id_str'])
+        prev_tweet_id = tweet['in_reply_to_status_id_str']
         if (prev_tweet_id in known_tweets):
             counts['known_reply'] += 1
         else:
@@ -824,7 +824,7 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
     # 3. use the data that is already present in a tweet to distinguish own tweets from others
 
     # Load tweets that we saved in an earlier run between pass 2 and 3
-    tweet_dict_filename = 'known_tweets.json'
+    tweet_dict_filename = os.path.join(paths.dir_output_cache, 'known_tweets.json')
     if os.path.exists(tweet_dict_filename):
         with open(tweet_dict_filename, 'r', encoding='utf8') as f:
             known_tweets = json.load(f)
@@ -845,7 +845,7 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
 
     # (Maybe) download referenced tweets
     referenced_tweets = []
-    if (len(tweet_ids_to_download) > 0):
+    while (len(tweet_ids_to_download) > 0):
         print(f"Found references to {len(tweet_ids_to_download)} tweets which should be downloaded. Breakdown of download reasons:")
         for reason in ['quote', 'reply', 'retweet', 'media']:
             print(f" * {counts[reason]} because of {reason}")
@@ -862,8 +862,8 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
                     bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
                     guest_token = get_twitter_api_guest_token(session, bearer_token)
                     # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
-                    downloaded_tweets, remaining_tweet_ids = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
-                    # TODO maybe react if remaining_tweet_ids contains tweets
+                    downloaded_tweets, tweet_ids_to_download = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+
                     for downloaded_tweet in downloaded_tweets.values():
                         downloaded_tweet = unwrap_tweet(downloaded_tweet)
                         downloaded_tweet['from_api'] = True
