@@ -1236,9 +1236,9 @@ def main():
             f'about {estimated_follower_lookup_size:,} KB smaller and up to '
             f'{estimated_max_follower_lookup_time_in_minutes:.1f} minutes faster without them.\n'
         )
-        user_input = input(f'Do you want to include handles of your followers '
-                           f'in the online lookup of user handles anyway? [Y/n]')
-        if user_input.lower() in ['n', 'no']:
+
+        if not get_consent(f'Do you want to include handles of your followers '
+                           f'in the online lookup of user handles anyway?', default_to_yes=True):
             collected_user_ids = collected_user_ids_without_followers
 
     lookup_users(collected_user_ids, users)
