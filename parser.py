@@ -18,6 +18,7 @@
 """
 
 from collections import defaultdict
+from typing import Optional
 from urllib.parse import urlparse
 import datetime
 import glob
@@ -74,8 +75,6 @@ class PathConfig:
         self.dir_output_cache               = os.path.join(self.dir_archive,        'parser-cache')
         self.file_output_following          = os.path.join(self.dir_output,         'following.txt')
         self.file_output_followers          = os.path.join(self.dir_output,         'followers.txt')
-        self.file_template_dm_output        = os.path.join(self.dir_output,         'DMs-Archive-{}.md')
-        self.file_template_group_dm_output  = os.path.join(self.dir_output,         'DMs-Group-Archive-{}.md')
         self.file_download_log              = os.path.join(self.dir_output_media,   'download_log.txt')
         self.file_tweet_icon                = os.path.join(self.dir_output_media,   'tweet.ico')
         self.files_input_tweets             = find_files_input_tweets(self.dir_input_data)
@@ -88,7 +87,7 @@ class PathConfig:
         # Previously the filename was f'{dt.year}-{dt.month:02}-01-Tweet-Archive-{dt.year}-{dt.month:02}'
         return os.path.join(self.dir_output, f"{kind}-{format}", f"{year:04}", f"{year:04}-{month:02}-01-{kind}.{format}")
 
-    def create_path_for_file_output_dms(self, name, index=None, format="html", kind="DMs") -> str:
+    def create_path_for_file_output_dms(self, name: str, index: Optional[int]=None, format: str="html", kind: str="DMs") -> str:
         """Builds the path for a dm-archive file based on some properties."""
         index_suffix = ""
         if (index):
@@ -1189,11 +1188,12 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                 markdown += f'## {official_name} ##\n\n'
                 markdown += f'### Group conversation between {name_list}, part {chunk_index + 1}: ###\n\n----\n\n'
                 markdown += '\n\n----\n\n'.join(md for _, md in chunk)
-                conversation_output_filename = \
-                    paths.file_template_group_dm_output.format(f'{group_name}_part{chunk_index + 1:03}')
-
+                conversation_output_filename = paths.create_path_for_file_output_dms(
+                    name=group_name, format="md", kind="DMs-Group", index=chunk_index + 1
+                )
+                
                 # write part to a markdown file
-                with open(conversation_output_filename, 'w', encoding='utf8') as f:
+                with open_and_mkdirs(conversation_output_filename) as f:
                     f.write(markdown)
                 print(f'Wrote {len(chunk)} messages to {conversation_output_filename}')
                 num_written_files += 1
@@ -1202,9 +1202,10 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
             markdown += f'## {official_name} ##\n\n'
             markdown += f'### Group conversation between {name_list}: ###\n\n----\n\n'
             markdown += '\n\n----\n\n'.join(md for _, md in messages)
-            conversation_output_filename = paths.file_template_group_dm_output.format(group_name)
+            conversation_output_filename = \
+                paths.create_path_for_file_output_dms(name=group_name, format="md", kind="DMs-Group")
 
-            with open(conversation_output_filename, 'w', encoding='utf8') as f:
+            with open_and_mkdirs(conversation_output_filename) as f:
                 f.write(markdown)
             print(f'Wrote {len(messages)} messages to {conversation_output_filename}')
             num_written_files += 1
