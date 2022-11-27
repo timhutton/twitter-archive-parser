@@ -175,18 +175,22 @@ def convert_tweet(tweet, username, media_sources, users, paths):
     # added to the urls entities list so that we can build correct links later on.
     if 'entities' in tweet and 'media' not in tweet['entities'] and len(tweet['entities'].get("urls", [])) == 0:
         for word in tweet['full_text'].split():
-            url = urlparse(word)
-            if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
-                # Shorten links similiar to twitter
-                netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
-                path_short = url.path if len(url.path + '?' + url.query) < 15 \
-                    else (url.path + '?' + url.query)[:15] + '\u2026'
-                tweet['entities']['urls'].append({
-                    'url': word,
-                    'expanded_url': word,
-                    'display_url': netloc_short + path_short,
-                    'indices': [tweet['full_text'].index(word), tweet['full_text'].index(word) + len(word)],
-                })
+            try:
+                url = urlparse(word)
+            except ValueError:
+                pass  # don't crash when trying to parse something that looks like a URL but actually isn't
+            else:
+                if url.scheme != '' and url.netloc != '' and not word.endswith('\u2026'):
+                    # Shorten links similar to twitter
+                    netloc_short = url.netloc[4:] if url.netloc.startswith("www.") else url.netloc
+                    path_short = url.path if len(url.path + '?' + url.query) < 15 \
+                        else (url.path + '?' + url.query)[:15] + '\u2026'
+                    tweet['entities']['urls'].append({
+                        'url': word,
+                        'expanded_url': word,
+                        'display_url': netloc_short + path_short,
+                        'indices': [tweet['full_text'].index(word), tweet['full_text'].index(word) + len(word)],
+                    })
     # replace t.co URLs with their original versions
     if 'entities' in tweet and 'urls' in tweet['entities']:
         for url in tweet['entities']['urls']:
