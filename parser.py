@@ -42,8 +42,12 @@ f' Error: This script requires Python 3.6 or later. Use `python --version` to ch
 
 
 class UserData:
-    def __init__(self, id, handle = None):
-        self.id = id
+    def __init__(self, user_id: str, handle: str):
+        if user_id is None:
+            raise ValueError('ID "None" is not allowed in UserData.')
+        self.user_id = user_id
+        if handle is None:
+            raise ValueError('handle "None" is not allowed in UserData.')
         self.handle = handle
 
 
@@ -207,7 +211,8 @@ def lookup_users(user_ids, users):
             guest_token = get_twitter_api_guest_token(session, bearer_token)
             retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
             for user_id, user in retrieved_users.items():
-                users[user_id] = UserData(user_id, user["screen_name"])
+                if user["screen_name"] is not None:
+                    users[user_id] = UserData(user_id=user_id, handle=user["screen_name"])
         print()  # empty line for better readability of output
     except Exception as err:
         print(f'Failed to download user data: {err}')
@@ -256,7 +261,7 @@ def escape_markdown(input_text: str) -> str:
     return output_text
 
 
-def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
+def convert_tweet(tweet, username, media_sources, users: dict, paths: PathConfig):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     if 'tweet' in tweet.keys():
         tweet = tweet['tweet']
@@ -397,17 +402,19 @@ def convert_tweet(tweet, username, media_sources, users, paths: PathConfig):
     body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{icon_url}" ' \
                                           f'width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
-    if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
-        id = tweet['in_reply_to_user_id']
-        if int(id) >= 0: # some ids are -1, not sure why
+    if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet and \
+            tweet['in_reply_to_screen_name'] is not None:
+        reply_to_id = tweet['in_reply_to_user_id']
+        if int(reply_to_id) >= 0:  # some ids are -1, not sure why
             handle = tweet['in_reply_to_screen_name']
-            users[id] = UserData(id=id, handle=handle)
+            users[reply_to_id] = UserData(user_id=reply_to_id, handle=handle)
     if 'entities' in tweet and 'user_mentions' in tweet['entities']:
         for mention in tweet['entities']['user_mentions']:
-            id = mention['id']
-            if int(id) >= 0: # some ids are -1, not sure why
+            mentioned_id = mention['id']
+            if int(mentioned_id) >= 0:  # some ids are -1, not sure why
                 handle = mention['screen_name']
-                users[id] = UserData(id=id, handle=handle)
+                if handle is not None:
+                    users[mentioned_id] = UserData(user_id=mentioned_id, handle=handle)
 
     return timestamp, body_markdown, body_html
 
