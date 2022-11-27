@@ -961,6 +961,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
             group_conversations_metadata[conversation_id]['participant_names'] = participant_names
             group_conversations_metadata[conversation_id]['conversation_names'] = [(0, conversation_id)]
             group_conversations_metadata[conversation_id]['participant_message_count'] = defaultdict(int)
+            for participant_id in participants:
+                # init every participant's message count with 0, so that users with no activity are not ignored
+                group_conversations_metadata[conversation_id]['participant_message_count'][participant_id] = 0
             messages = []
             if 'messages' in dm_conversation:
                 for message in dm_conversation['messages']:
@@ -1156,6 +1159,8 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                     participant_handle = users[participant_id].handle
                     if participant_handle != username:
                         handles.append((participant_handle, message_count))
+            # sort alphabetically by handle first, for a more deterministic order
+            handles.sort(key=lambda tup: tup[0])
             # sort so that the most active users are at the start of the list
             handles.sort(key=lambda tup: tup[1], reverse=True)
             if len(handles) == 1:
