@@ -408,13 +408,14 @@ def convert_tweet(tweet, username, media_sources, users: dict, paths: PathConfig
         if int(reply_to_id) >= 0:  # some ids are -1, not sure why
             handle = tweet['in_reply_to_screen_name']
             users[reply_to_id] = UserData(user_id=reply_to_id, handle=handle)
-    if 'entities' in tweet and 'user_mentions' in tweet['entities']:
+    if 'entities' in tweet and 'user_mentions' in tweet['entities'] and tweet['entities']['user_mentions'] is not None:
         for mention in tweet['entities']['user_mentions']:
-            mentioned_id = mention['id']
-            if int(mentioned_id) >= 0:  # some ids are -1, not sure why
-                handle = mention['screen_name']
-                if handle is not None:
-                    users[mentioned_id] = UserData(user_id=mentioned_id, handle=handle)
+            if mention is not None and 'id' in mention and 'screen_name' in mention:
+                mentioned_id = mention['id']
+                if int(mentioned_id) >= 0:  # some ids are -1, not sure why
+                    handle = mention['screen_name']
+                    if handle is not None:
+                        users[mentioned_id] = UserData(user_id=mentioned_id, handle=handle)
 
     return timestamp, body_markdown, body_html
 
