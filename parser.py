@@ -442,6 +442,32 @@ def download_larger_media(media_sources, paths):
             else:
                 retries.append((local_media_path, media_url))
             total_bytes_downloaded += bytes_downloaded
+
+            # show % done and estimated remaining time:
+            time_elapsed: float = time.time() - start_time
+            estimated_time_per_file: float = time_elapsed / (index + 1)
+            estimated_time_remaining: datetime.datetime = \
+                datetime.datetime.fromtimestamp(
+                    (number_of_files - (index + 1)) * estimated_time_per_file,
+                    tz=datetime.timezone.utc
+                )
+            if estimated_time_remaining.hour >= 1:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.hour} hour{'' if estimated_time_remaining.hour == 1 else 's'} " \
+                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'}"
+            elif estimated_time_remaining.minute >= 1:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'} " \
+                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
+            else:
+                time_remaining_string: str = \
+                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
+
+            if index + 1 == number_of_files:
+                print('    100 % done.')
+            else:
+                print(f'    {(100*(index+1)/number_of_files):.1f} % done, about {time_remaining_string} remaining...')
+
         media_sources = retries
         remaining_tries -= 1
         sleep_time += 2
