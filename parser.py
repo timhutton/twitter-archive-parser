@@ -480,7 +480,7 @@ def parse_tweets(username, users, html_template, paths):
 
     for filename, content in grouped_tweets.items():
         # Write into *.md files
-        md_string =  '\n\n----\n\n'.join(md for md, _ in content)
+        md_string = '\n\n----\n\n'.join(md for md, _ in content)
         with open(f'{filename}.md', 'w', encoding='utf-8') as f:
             f.write(md_string)
 
@@ -614,6 +614,8 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # escape message body for markdown rendering:
+                            body_markdown = escape_markdown(body)
                             # replace image URLs with image links to local files
                             if 'mediaUrls' in message_create \
                                     and len(message_create['mediaUrls']) == 1 \
@@ -631,7 +633,9 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
                                     if not os.path.isfile(new_url):
                                         shutil.copy(archive_media_path, new_url)
                                     image_markdown = f'\n![]({new_url})\n'
-                                    body = body.replace(original_expanded_url, image_markdown)
+                                    body_markdown = body_markdown.replace(
+                                        escape_markdown(original_expanded_url), image_markdown
+                                    )
 
                                     # Save the online location of the best-quality version of this file,
                                     # for later upgrading if wanted
@@ -662,7 +666,9 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
                                                 shutil.copy(archive_media_path, media_url)
                                             video_markdown = f'\n<video controls><source src="{media_url}">' \
                                                              f'Your browser does not support the video tag.</video>\n'
-                                            body = body.replace(original_expanded_url, video_markdown)
+                                            body_markdown = body_markdown.replace(
+                                                escape_markdown(original_expanded_url), video_markdown
+                                            )
 
                                     # TODO: maybe  also save the online location of the best-quality version for videos?
                                     #  (see above)
@@ -675,13 +681,15 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = \
                                 int(round(datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()))
 
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            to_handle = users[to_id].handle.replace('_', '\\_') if to_id in users \
+                            to_handle = escape_markdown(users[to_id].handle) if to_id in users \
                                 else user_id_url_template.format(to_id)
 
-                            message_markdown = f'\n\n### {from_handle} -> {to_handle}: ' \
-                                               f'({created_at}) ###\n```\n{body}\n```'
+                            # make the body a quote
+                            body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
+                            message_markdown = f'{from_handle} -> {to_handle}: ({created_at}) \n\n' \
+                                               f'{body_markdown}'
                             messages.append((timestamp, message_markdown))
 
             # find identifier for the conversation
@@ -697,12 +705,12 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
         # sort messages by timestamp
         messages.sort(key=lambda tup: tup[0])
 
-        other_user_name = users[other_user_id].handle.replace('_', '\\_') if other_user_id in users \
+        other_user_name = escape_markdown(users[other_user_id].handle) if other_user_id in users \
             else user_id_url_template.format(other_user_id)
 
         other_user_short_name: str = users[other_user_id].handle if other_user_id in users else other_user_id
 
-        escaped_username = username.replace('_', '\\_')
+        escaped_username = escape_markdown(username)
 
         # if there are more than 1000 messages, the conversation was split up in the twitter archive.
         # following this standard, also split up longer conversations in the output files:
@@ -710,9 +718,9 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'## Conversation between {escaped_username} and {other_user_name}, ' \
-                            f'part {chunk_index+1}: ##\n'
-                markdown += ''.join(md for _, md in chunk)
+                markdown += f'### Conversation between {escaped_username} and {other_user_name}, ' \
+                            f'part {chunk_index+1}: ###\n\n----\n\n'
+                markdown += '\n\n----\n\n'.join(md for _, md in chunk)
                 conversation_output_filename = \
                     paths.file_template_dm_output.format(f'{other_user_short_name}_part{chunk_index+1:03}')
 
@@ -724,8 +732,8 @@ def parse_direct_messages(username, users, user_id_url_template, paths):
 
         else:
             markdown = ''
-            markdown += f'## Conversation between {escaped_username} and {other_user_name}: ##\n'
-            markdown += ''.join(md for _, md in messages)
+            markdown += f'### Conversation between {escaped_username} and {other_user_name}: ###\n\n----\n\n'
+            markdown += '\n\n----\n\n'.join(md for _, md in messages)
             conversation_output_filename = paths.file_template_dm_output.format(other_user_short_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
@@ -841,6 +849,8 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                     if 'url' in url and 'expanded' in url:
                                         expanded_url = url['expanded']
                                         body = body.replace(url['url'], expanded_url)
+                            # escape message body for markdown rendering:
+                            body_markdown = escape_markdown(body)
                             # replace image URLs with image links to local files
                             if 'mediaUrls' in message_create \
                                     and len(message_create['mediaUrls']) == 1 \
@@ -859,7 +869,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                     if not os.path.isfile(new_url):
                                         shutil.copy(archive_media_path, new_url)
                                     image_markdown = f'\n![]({new_url})\n'
-                                    body = body.replace(original_expanded_url, image_markdown)
+                                    body_markdown = body_markdown.replace(
+                                        escape_markdown(original_expanded_url), image_markdown
+                                    )
 
                                     # Save the online location of the best-quality version of this file,
                                     # for later upgrading if wanted
@@ -892,7 +904,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                                 shutil.copy(archive_media_path, media_url)
                                             video_markdown = f'\n<video controls><source src="{media_url}">' \
                                                              f'Your browser does not support the video tag.</video>\n'
-                                            body = body.replace(original_expanded_url, video_markdown)
+                                            body_markdown = body_markdown.replace(
+                                                escape_markdown(original_expanded_url), video_markdown
+                                            )
 
                                     # TODO: maybe  also save the online location of the best-quality version for videos?
                                     #  (see above)
@@ -904,22 +918,25 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n```\n{body}\n```'
+                            # make the body a quote
+                            body_markdown = '> ' + '\n> '.join(body_markdown.splitlines())
+                            message_markdown = f'{from_handle}: ({created_at})\n\n' \
+                                               f'{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "conversationNameUpdate" in message:
                         conversation_name_update = message['conversationNameUpdate']
                         if all(tag in conversation_name_update for tag in ['initiatingUserId', 'name', 'createdAt']):
                             from_id = conversation_name_update['initiatingUserId']
-                            body = f"_changed group name to: {conversation_name_update['name']}_"
+                            body_markdown = f"_changed group name to: {escape_markdown(conversation_name_update['name'])}_"
                             created_at = conversation_name_update['createdAt']  # example: 2022-01-27T15:58:52.744Z
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                             # save metadata about name change:
                             group_conversations_metadata[conversation_id]['conversation_names'].append(
@@ -933,11 +950,11 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
-                            escaped_username = username.replace('_', '\\_')
-                            body = f'_{from_handle} added {escaped_username} to the group_'
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            escaped_username = escape_markdown(username)
+                            body_markdown = f'_{from_handle} added {escaped_username} to the group_'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "participantsJoin" in message:
                         participants_join = message['participantsJoin']
@@ -947,16 +964,16 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                             timestamp = int(round(
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
-                            from_handle = users[from_id].handle.replace('_', '\\_') if from_id in users \
+                            from_handle = escape_markdown(users[from_id].handle) if from_id in users \
                                 else user_id_url_template.format(from_id)
                             joined_ids = participants_join['userIds']
-                            joined_handles = [users[joined_id].handle.replace('_', '\\_') if joined_id in users
+                            joined_handles = [escape_markdown(users[joined_id].handle) if joined_id in users
                                               else user_id_url_template.format(joined_id) for joined_id in joined_ids]
                             name_list = ', '.join(joined_handles[:-1]) + \
                                         (f' and {joined_handles[-1]}' if len(joined_handles) > 1 else
                                          joined_handles[0])
-                            body = f'_{from_handle} added {name_list} to the group_'
-                            message_markdown = f'\n\n### {from_handle}: ({created_at}) ###\n\n{body}\n'
+                            body_markdown = f'_{from_handle} added {name_list} to the group_'
+                            message_markdown = f'{from_handle}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
                     elif "participantsLeave" in message:
                         participants_leave = message['participantsLeave']
@@ -966,13 +983,13 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                                 datetime.datetime.strptime(created_at, '%Y-%m-%dT%X.%fZ').timestamp()
                             ))
                             left_ids = participants_leave['userIds']
-                            left_handles = [users[left_id].handle.replace('_', '\\_') if left_id in users
+                            left_handles = [escape_markdown(users[left_id].handle) if left_id in users
                                             else user_id_url_template.format(left_id) for left_id in left_ids]
                             name_list = ', '.join(left_handles[:-1]) + \
                                         (f' and {left_handles[-1]}' if len(left_handles) > 1 else
                                          left_handles[0])
-                            body = f'_{name_list} left the group_'
-                            message_markdown = f'\n\n### {name_list}: ({created_at}) ###\n\n{body}\n'
+                            body_markdown = f'_{name_list} left the group_'
+                            message_markdown = f'{name_list}: ({created_at})\n\n{body_markdown}'
                             messages.append((timestamp, message_markdown))
 
             # collect messages per conversation in group_conversations_messages dict
@@ -1029,7 +1046,7 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
         # create a list of names of the form '@name1, @name2 and @name3'
         # to use as a headline in the output file
         escaped_participant_names = [
-            participant_name.replace('_', '\\_')
+            escape_markdown(participant_name)
             for participant_name in group_conversations_metadata[conversation_id]['participant_names']
         ]
         name_list = ', '.join(escaped_participant_names[:-1]) + \
@@ -1040,9 +1057,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
         if len(messages) > 1000:
             for chunk_index, chunk in enumerate(chunks(messages, 1000)):
                 markdown = ''
-                markdown += f'# {official_name}\n'
-                markdown += f'## Group conversation between {name_list}, part {chunk_index + 1}: ##\n'
-                markdown += ''.join(md for _, md in chunk)
+                markdown += f'## {official_name} ##\n\n'
+                markdown += f'### Group conversation between {name_list}, part {chunk_index + 1}: ###\n\n----\n\n'
+                markdown += '\n\n----\n\n'.join(md for _, md in chunk)
                 conversation_output_filename = \
                     paths.file_template_group_dm_output.format(f'{group_name}_part{chunk_index + 1:03}')
 
@@ -1053,9 +1070,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                 num_written_files += 1
         else:
             markdown = ''
-            markdown += f'# {official_name}\n'
-            markdown += f'## Group conversation between {name_list}: ##\n'
-            markdown += ''.join(md for _, md in messages)
+            markdown += f'## {official_name} ##\n\n'
+            markdown += f'### Group conversation between {name_list}: ###\n\n----\n\n'
+            markdown += '\n\n----\n\n'.join(md for _, md in messages)
             conversation_output_filename = paths.file_template_group_dm_output.format(group_name)
 
             with open(conversation_output_filename, 'w', encoding='utf8') as f:
