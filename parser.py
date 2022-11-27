@@ -450,7 +450,6 @@ def collect_tweet_references(tweet, known_tweets, counts):
                         counts['known_quote'] += 1
                     else:
                         tweet_ids.add(quoted_id)
-                        print(f"Need to download tweet {tweet['id_str']} because of being quoted")
                         counts['quote'] += 1
 
     # Collect previous tweets in conversation
@@ -461,14 +460,12 @@ def collect_tweet_references(tweet, known_tweets, counts):
             counts['known_reply'] += 1
         else:
             tweet_ids.add(prev_tweet_id)
-            print(f"Need to download tweet {prev_tweet_id} because of reply to it")
             counts['reply'] += 1
 
     # Collect retweets
     # Don't do this if we already re-downloaded this tweet
     if not 'from_api' in tweet and 'full_text' in tweet and tweet['full_text'].startswith('RT @'):
         tweet_ids.add(tweet['id_str'])
-        print(f"Need to download tweet {tweet['id_str']} because of retweet")
         counts['retweet'] += 1
 
     # Collect tweets with media, which might lack alt text
@@ -476,7 +473,6 @@ def collect_tweet_references(tweet, known_tweets, counts):
     # Don't do this if we already re-downloaded this tweet with alt texts enabled
     if not 'download_with_alt_text' in tweet and has_path(tweet, ['entities', 'media']):
         tweet_ids.add(tweet['id_str'])
-        print(f"Need to download tweet {tweet['id_str']} because of contained media")
         counts['media'] += 1
 
     if None in tweet_ids:
@@ -845,12 +841,19 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
 
     # (Maybe) download referenced tweets
     referenced_tweets = []
-    while (len(tweet_ids_to_download) > 0):
+    if (len(tweet_ids_to_download) >0):
         print(f"Found references to {len(tweet_ids_to_download)} tweets which should be downloaded. Breakdown of download reasons:")
         for reason in ['quote', 'reply', 'retweet', 'media']:
             print(f" * {counts[reason]} because of {reason}")
         print(f"There were {counts['known_reply']} references to tweets which are already known so we don't need to download them (not included in the numbers above).")
+        print()
+        print("Please note that the downloaded tweets will not be included in the generated output yet.")
+        print("Anyway, we recommend to download the tweets now, just in case Twitter (or its API which")
+        print("we use), won't be available forever. A future version of this script will be able to")
+        print("include the downloaded tweets into the output, even if Twitter should not be available then.")
+        print()
 
+    while (len(tweet_ids_to_download) > 0):
         estimated_download_time_seconds = math.ceil(len(tweet_ids_to_download) / 100) * 2
         estimated_download_time_str = format_duration(estimated_download_time_seconds)
         if get_consent(f"OK to download {len(tweet_ids_to_download)} tweets from twitter? This would take about {estimated_download_time_str}."):
@@ -875,7 +878,14 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
                     print(f"Saved {len(known_tweets)} tweets to '{tweet_dict_filename}'.")
 
             except Exception as err:
+                # this code is rather unlikely to be reached, since get_tweets has internal error handling.
                 print(f'Failed to download tweets: {err}')
+
+            if len(tweet_ids_to_download) > 0:
+                print("Not all tweets could be downloaded, but you can retry if you want.")
+        else:
+            # Don't ask again and again if the user said 'no'
+            break
 
     # Third pass: convert tweets, using the downloaded references from pass 2
     for tweet in known_tweets.values():
