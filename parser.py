@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 import traceback
+from typing import List
 # hot-loaded if needed, see import_module():
 #  imagesize
 #  requests
@@ -94,7 +95,7 @@ def get_twitter_users(session, bearer_token, guest_token, user_ids):
     return users
 
 def get_tweets(session, bearer_token, guest_token, tweet_ids, include_user=True, include_alt_text=True):
-    """ Get the json metadata for a multiple tweets.
+    """Get the json metadata for multiple tweets.
     If include_user is False, you will only get a numerical id for the user.
     Returns `tweets, remaining_tweet_ids` where `tweets`. If all goes well, `tweets` will contain all
     tweets, and `remaining_tweet_ids` is empty. If something goes wrong, downloading is stopped
@@ -186,7 +187,7 @@ def collect_tweet_id(tweet):
         tweet = tweet['tweet']
     return tweet['id_str']
 
-# returns an it if you give it either an int or a str that can be parsed as 
+# returns an int if you give it either an int or a str that can be parsed as 
 # an int. Otherwise, returns None.
 def parse_as_number(str_or_number):
     if isinstance(str_or_number, str):
@@ -198,17 +199,59 @@ def parse_as_number(str_or_number):
         return str_or_number
     else:
         return None
-    
+
+def equal_ignore_types(a, b):
+    """Recognizes two things as equal even if one is a str and the other is a number (but with identical content), or if both are lists or both are dicts, and all of their nested values are equal_ignore_types"""
+    if a == b:
+        return True
+    if parse_as_number(a) is not None and parse_as_number(b) is not None: 
+        return parse_as_number(a) == parse_as_number(b)
+    if isinstance(a, dict) and isinstance (b, dict):
+        if len(a) != len(b):
+            return False
+        for key in a.keys():
+            if not equal_ignore_types(a[key], b[key]):
+                return False
+        return True
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return False
+        for i in range(len(a)):
+            if not equal_ignore_types(a[i], b[i]):
+                return False
+        return True
+    return False
+
+def merge_lists(a: list, b: list, ignore_types:bool=False):
+    """Adds all items from b to a which are not already in a. If you pass ignore_types=True, it uses equal_ignore_types internally, and also recognizes two list items as equal if they both are dicts with equal id_str values in it, which results in merging the dicts instead of adding both separately to the result. Modifies a and returns a."""
+    for item_b in b:
+        found_in_a = False
+        if ignore_types:
+            for item_a in a:
+                if equal_ignore_types(item_a, item_b):
+                    found_in_a = True
+                    break
+                if isinstance(item_a, dict) and isinstance(item_b, dict) and has_path(item_a, ['id_str']) and has_path(item_b, ['id_str']) and item_a['id_str'] == item_b['id_str']:
+                    merge_dicts(item_a, item_b)
+        else:
+            found_in_a = item_b in a
+
+        if not found_in_a:
+            a.append(item_b)
+    return a
+
 
 # Taken from https://stackoverflow.com/a/7205107/39946, then adapted to
 # some commonly observed twitter specifics.
-def merge(a, b, path=None):
+def merge_dicts(a, b, path=None):
     "merges b into a"
     if path is None: path = []
     for key in b:
         if key in a:
             if isinstance(a[key], dict) and isinstance(b[key], dict):
-                merge(a[key], b[key], path + [str(key)])
+                merge_dicts(a[key], b[key], path + [str(key)])
+            elif isinstance(a[key], list) and isinstance(b[key], list):
+                merge_lists(a[key], b[key], ignore_types=True)
             elif a[key] == b[key]:
                 pass # same leaf value
             elif key == 'retweet_count' or key == 'favorite_count':
@@ -245,8 +288,9 @@ def add_known_tweet(known_tweets, new_tweet):
             #print(f"Tweet {tweet_id} was already known with identical contents")
         else:
             try:
-                merge(known_tweets[tweet_id], new_tweet)
+                merge_dicts(known_tweets[tweet_id], new_tweet)
             except Exception as err:
+                print(traceback.format_exc())
                 print(f"Tweet {tweet_id} could not be merged: {err}")
                 
     else:
@@ -304,8 +348,8 @@ def collect_tweet_references(tweet, known_tweets, counts):
 
     return tweet_ids
 
-# Walks a path through nested dicts or lists, and returns True if all the keys are present, and all of the values are not None
-def has_path(dict, index_path):
+def has_path(dict, index_path: List[str]):
+    """Walks a path through nested dicts or lists, and returns True if all the keys are present, and all of the values are not None."""
     for index in index_path:
         if not index in dict:
             return False
@@ -315,7 +359,7 @@ def has_path(dict, index_path):
     return True
 
 def convert_tweet(tweet, username, archive_media_folder, output_media_folder_name,
-                  tweet_icon_path, media_sources, users, referenced_tweets):
+                  tweet_icon_path, media_sources: dict, users, referenced_tweets):
     """Converts a JSON-format tweet. Returns tuple of timestamp, markdown and HTML."""
     # TODO actually use `referenced_tweets`
     tweet = unwrap_tweet(tweet)
@@ -354,7 +398,9 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
         header_markdown += f'Replying to [{name_list}]({replying_to_url})\n\n'
         header_html += f'Replying to <a href="{replying_to_url}">{name_list}</a><br>'
     # replace image URLs with image links to local files
-    if has_path(tweet, ['entities', 'media', 0, 'url']) and has_path(tweet, ['extended_entities', 'media']):
+    if has_path(tweet, ['entities', 'media']) and has_path(tweet, ['extended_entities', 'media']) \
+        and len(tweet['entities']['media']) > 0 and 'url' in tweet['entities']['media'][0]:
+            
         original_url = tweet['entities']['media'][0]['url']
         markdown = ''
         html = ''
@@ -367,6 +413,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                 new_url = output_media_folder_name + archive_media_filename
                 markdown += '' if not markdown and body_markdown == original_url else '\n\n'
                 html += '' if not html and body_html == original_url else '<br>'
+                # if file exists, this means that file is probably an image (not a video)
                 if os.path.isfile(archive_media_path):
                     # Found a matching image, use this one
                     if not os.path.isfile(new_url):
@@ -375,8 +422,10 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                     html += f'<img src="{new_url}"/>'
                     # Save the online location of the best-quality version of this file, for later upgrading if wanted
                     best_quality_url = f'https://pbs.twimg.com/media/{original_filename}:orig'
-                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                    media_sources[os.path.join(output_media_folder_name, archive_media_filename)] = best_quality_url
                 else:
+                    # If the file does not exists, it might be a video. Then its filename might
+                    # be found like this:
                     # Is there any other file that includes the tweet_id in its filename?
                     archive_media_paths = glob.glob(os.path.join(archive_media_folder, tweet_id_str + '*'))
                     if len(archive_media_paths) > 0:
@@ -401,7 +450,7 @@ def convert_tweet(tweet, username, archive_media_folder, output_media_folder_nam
                                     print(f"Warning No URL found for {original_url} {original_expanded_url} {archive_media_path} {media_url}")
                                     print(f"JSON: {tweet}")
                                 else:
-                                    media_sources.append((os.path.join(output_media_folder_name, archive_media_filename), best_quality_url))
+                                    media_sources[os.path.join(output_media_folder_name, archive_media_filename)] = best_quality_url
                     else:
                         print(f'Warning: missing local file: {archive_media_path}. Using original link instead: {original_url} (expands to {original_expanded_url})')
                         markdown += f'![]({original_url})'
@@ -521,7 +570,7 @@ def download_file_if_larger(url, filename, index, count, sleep_time):
         return False, 0
 
 
-def download_larger_media(media_sources, log_path):
+def download_larger_media(media_sources: dict, log_path):
     """Uses (filename, URL) tuples in media_sources to download files from remote storage.
        Aborts downloads if the remote file is the same size or smaller than the existing local version.
        Retries the failed downloads several times, with increasing pauses between each to avoid being blocked.
@@ -540,7 +589,7 @@ def download_larger_media(media_sources, log_path):
         number_of_files = len(media_sources)
         success_count = 0
         retries = []
-        for index, (local_media_path, media_url) in enumerate(media_sources):
+        for index, (local_media_path, media_url) in enumerate(media_sources.items()):
             success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
             if success:
                 success_count += 1
@@ -563,14 +612,14 @@ def download_larger_media(media_sources, log_path):
 
 
 def parse_tweets(input_filenames, username, users, html_template, archive_media_folder,
-                 output_media_folder_name, tweet_icon_path, output_html_filename):
+                 output_media_folder_name, tweet_icon_path, output_html_filename) -> dict:
     """Read tweets from input_filenames, write to *.md and output_html_filename.
        Copy the media used to output_media_folder_name.
        Collect user_id:user_handle mappings for later use, in 'users'.
        Returns the mapping from media filename to best-quality URL.
     """
     converted_tweets = []
-    media_sources = []
+    media_sources = {}
     counts = defaultdict(int)
     known_tweets = {}
 
@@ -601,7 +650,8 @@ def parse_tweets(input_filenames, username, users, html_template, archive_media_
     for tweet in known_tweets.values():
         tweet_ids_to_download.update(collect_tweet_references(tweet, known_tweets, counts))
 
-    # Download referenced tweets
+    # (Maybe) download referenced tweets
+    # TODO ask user for consent to download
     referenced_tweets = []
     if (len(tweet_ids_to_download) > 0):
         print(f"Found references to {len(tweet_ids_to_download)} tweets which should be downloaded. Breakdown of download reasons:")
