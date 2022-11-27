@@ -1232,7 +1232,6 @@ def migrate_old_output(paths: PathConfig):
             print(f"Moving {len(files_to_move)} files from 'media' to '{paths.dir_output_media}'")
             for file_path_to_move in files_to_move:
                 file_name_to_move = os.path.split(file_path_to_move)[1]
-                print(file_name_to_move)
                 os.rename(file_path_to_move, os.path.join(paths.dir_output_media, file_name_to_move))
         os.rmdir(os.path.join(paths.dir_archive, "media"))
 
