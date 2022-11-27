@@ -453,13 +453,13 @@ def parse_tweets(username, users, html_template, paths):
 
     for filename, content in grouped_tweets.items():
         # Write into *.md files
-        md_string =  '\n\n----\n\n'.join(md for md, _ in content)
-        with open(f'{filename}.md', 'w', encoding='utf-8') as f:
+        md_string = '\n\n----\n\n'.join(md for md, _ in content)
+        with open(os.path.join(paths.dir_output, f'{filename}.md'), 'w', encoding='utf-8') as f:
             f.write(md_string)
 
         # Write into *.html files
         html_string = '<hr>\n'.join(html for _, html in content)
-        with open(f'{filename}.html', 'w', encoding='utf-8') as f:
+        with open(os.path.join(paths.dir_output, f'{filename}.html'), 'w', encoding='utf-8') as f:
             f.write(html_template.format(html_string))
 
     print(f'Wrote {len(tweets)} tweets to *.md and *.html, with images and video embedded from {paths.dir_output_media}')
@@ -1010,13 +1010,14 @@ class PathConfig:
     """Helper class containing constants for various directories and files."""
 
     def __init__(self, dir_archive, dir_output):
+        self.dir_output = dir_output
         self.dir_input_data = os.path.join(dir_archive, 'data')
         self.file_account_js = os.path.join(self.dir_input_data, 'account.js')
 
         # check if user is in correct folder
         if not os.path.isfile(self.file_account_js):
             print(
-                f'Error: Failed to load {self.file_account_js}. Start this script in the root folder of your Twitter archive.')
+                f'Error: Failed to load {self.file_account_js}.')
             exit()
 
         self.dir_input_media = find_dir_input_media(self.dir_input_data)
@@ -1030,8 +1031,41 @@ class PathConfig:
         self.files_input_tweets = find_files_input_tweets(self.dir_input_data)
 
 
+def is_archive(path):
+    """Return true if there is a Twitter archive at the given path"""
+    return os.path.isfile(os.path.join(path, 'data', 'account.js'))
+
+
+def find_archive():
+    """
+    Search for the archive
+    1. First try the working directory.
+    2. Then try the script directory.
+    3. Finally prompt the user.
+    """
+    if is_archive('.'):
+        return '.'
+    script_dir = os.path.dirname(__file__)
+    if script_dir != os.getcwd():
+        if is_archive(script_dir):
+            return script_dir
+    print('Archive not found in working directory or script directory.\n'
+          'Please enter the path of your Twitter archive, or just press Enter to exit.\n'
+          'On most operating systems, you can also try to drag and drop your archive folder '
+          'into the terminal window, and it will paste its path automatically.\n')
+    # Give the user as many attempts as they need.
+    while True:
+        input_path = input('Archive path: ')
+        if not input_path:
+            exit()
+        if is_archive(input_path):
+            return input_path
+        print(f'Archive not found at {input_path}')
+
+
 def main():
-    paths = PathConfig(dir_archive='.', dir_output='.')
+    archive_path = find_archive()
+    paths = PathConfig(dir_archive=archive_path, dir_output=archive_path)
 
     # Extract the archive owner's username from data/account.js
     username = extract_username(paths)
