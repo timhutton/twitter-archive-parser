@@ -2,7 +2,12 @@
 1. [Download your Twitter archive](https://twitter.com/settings/download_your_data) (Settings > Your account > Download an archive of your data).
 2. Unzip to a folder.
 3. Right-click this link --> [parser.py](https://raw.githubusercontent.com/timhutton/twitter-archive-parser/main/parser.py) <-- and select "Save Link as", and save into the folder where you extracted the archive. (Or use wget or curl on that link. Or clone the git repo.)
-4. Run parser.py with [Python 3](https://realpython.com/installing-python/). e.g. `python parser.py` from a command prompt opened in that folder.
+4. Open a command prompt and change directory into the unzipped folder where you just saved parser.py.  
+   (**Here's how to do that on Windows:** Hold shift while right-clicking in the folder. Click on `Open PowerShell`.)
+5. Run parser.py with [Python 3](https://realpython.com/installing-python/). e.g. `python parser.py`.  
+  (**On Windows:** When the command window opens, paste or enter `python parser.py` at the command prompt.)
+
+
 
 If you are having problems please check the [issues list](https://github.com/timhutton/twitter-archive-parser/issues?q=is%3Aissue) to see if it has happened before, and open a new issue otherwise.
 
