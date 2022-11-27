@@ -18,6 +18,7 @@
 """
 
 from collections import defaultdict
+import math
 from typing import Optional
 from urllib.parse import urlparse
 import datetime
@@ -99,6 +100,22 @@ class PathConfig:
     def create_path_for_file_output_single(self, format: str, kind: str)->str:
         """Builds the path for a single output file which, i.e. one that is not part of a larger group or sequence."""
         return os.path.join(self.dir_output, f"{kind}.{format}")
+
+
+def format_duration(seconds: float) -> str:
+    duration_datetime: datetime.datetime = \
+        datetime.datetime.fromtimestamp(
+            seconds,
+            tz=datetime.timezone.utc
+        )
+    if duration_datetime.hour >= 1:
+        return f"{duration_datetime.hour  } hour{  '' if duration_datetime.hour   == 1 else 's'} " \
+               f"{duration_datetime.minute} minute{'' if duration_datetime.minute == 1 else 's'}"
+    elif duration_datetime.minute >= 1:
+        return f"{duration_datetime.minute} minute{'' if duration_datetime.minute == 1 else 's'} " \
+               f"{duration_datetime.second} second{'' if duration_datetime.second == 1 else 's'}"
+    else:
+        return f"{duration_datetime.second} second{'' if duration_datetime.second == 1 else 's'}"
 
 
 def get_consent(prompt: str, default_to_yes: bool = False):
@@ -763,22 +780,8 @@ def download_larger_media(media_sources: dict, paths: PathConfig):
             # show % done and estimated remaining time:
             time_elapsed: float = time.time() - start_time
             estimated_time_per_file: float = time_elapsed / (index + 1)
-            estimated_time_remaining: datetime.datetime = \
-                datetime.datetime.fromtimestamp(
-                    (number_of_files - (index + 1)) * estimated_time_per_file,
-                    tz=datetime.timezone.utc
-                )
-            if estimated_time_remaining.hour >= 1:
-                time_remaining_string: str = \
-                    f"{estimated_time_remaining.hour} hour{'' if estimated_time_remaining.hour == 1 else 's'} " \
-                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'}"
-            elif estimated_time_remaining.minute >= 1:
-                time_remaining_string: str = \
-                    f"{estimated_time_remaining.minute} minute{'' if estimated_time_remaining.minute == 1 else 's'} " \
-                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
-            else:
-                time_remaining_string: str = \
-                    f"{estimated_time_remaining.second} second{'' if estimated_time_remaining.second == 1 else 's'}"
+
+            time_remaining_string = format_duration(seconds = (number_of_files - (index + 1)) * estimated_time_per_file)
 
             if index + 1 == number_of_files:
                 print('    100 % done.')
@@ -841,36 +844,38 @@ def parse_tweets(username, users, html_template, paths: PathConfig) -> dict:
         tweet_ids_to_download.update(collect_tweet_references(tweet, known_tweets, counts))
 
     # (Maybe) download referenced tweets
-    # TODO ask user for consent to download
     referenced_tweets = []
     if (len(tweet_ids_to_download) > 0):
         print(f"Found references to {len(tweet_ids_to_download)} tweets which should be downloaded. Breakdown of download reasons:")
         for reason in ['quote', 'reply', 'retweet', 'media']:
             print(f" * {counts[reason]} because of {reason}")
         print(f"There were {counts['known_reply']} references to tweets which are already known so we don't need to download them (not included in the numbers above).")
-        # TODO maybe ask the user if we should start downloading
-        # TODO maybe give an estimate of download size and/or time
-        # TODO maybe let the user choose which of the tweets to download, by selecting a subset of those reasons
-        requests = import_module('requests')
-        try:
-            with requests.Session() as session:
-                bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
-                guest_token = get_twitter_api_guest_token(session, bearer_token)
-                # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
-                downloaded_tweets, remaining_tweet_ids = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
-                # TODO maybe react if remaining_tweet_ids contains tweets
-                for downloaded_tweet in downloaded_tweets.values():
-                    downloaded_tweet = unwrap_tweet(downloaded_tweet)
-                    downloaded_tweet['from_api'] = True
-                    downloaded_tweet['download_with_user'] = False
-                    downloaded_tweet['download_with_alt_text'] = True
-                    add_known_tweet(known_tweets, downloaded_tweet)
-                with open(tweet_dict_filename, "w") as outfile:
-                    json.dump(known_tweets, outfile, indent=2)
-                print(f"Saved {len(known_tweets)} tweets to '{tweet_dict_filename}'.")
 
-        except Exception as err:
-            print(f'Failed to download tweets: {err}')
+        estimated_download_time_seconds = math.ceil(len(tweet_ids_to_download) / 100) * 2
+        estimated_download_time_str = format_duration(estimated_download_time_seconds)
+        if get_consent(f"OK to download {len(tweet_ids_to_download)} tweets from twitter? This would take about {estimated_download_time_str}."):
+            # TODO maybe give an estimate of download size and/or time
+            # TODO maybe let the user choose which of the tweets to download, by selecting a subset of those reasons
+            requests = import_module('requests')
+            try:
+                with requests.Session() as session:
+                    bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+                    guest_token = get_twitter_api_guest_token(session, bearer_token)
+                    # TODO We could download user data together with the tweets, because we will need it anyway. But we might download the data for each user multiple times then.
+                    downloaded_tweets, remaining_tweet_ids = get_tweets(session, bearer_token, guest_token, list(tweet_ids_to_download), False)
+                    # TODO maybe react if remaining_tweet_ids contains tweets
+                    for downloaded_tweet in downloaded_tweets.values():
+                        downloaded_tweet = unwrap_tweet(downloaded_tweet)
+                        downloaded_tweet['from_api'] = True
+                        downloaded_tweet['download_with_user'] = False
+                        downloaded_tweet['download_with_alt_text'] = True
+                        add_known_tweet(known_tweets, downloaded_tweet)
+                    with open(tweet_dict_filename, "w") as outfile:
+                        json.dump(known_tweets, outfile, indent=2)
+                    print(f"Saved {len(known_tweets)} tweets to '{tweet_dict_filename}'.")
+
+            except Exception as err:
+                print(f'Failed to download tweets: {err}')
 
     # Third pass: convert tweets, using the downloaded references from pass 2
     for tweet in known_tweets.values():
@@ -1655,8 +1660,12 @@ def main():
         print(f'frequent. This script may not work if your account is protected. You may want to set it to public')
         print(f'before starting the download.\n')
 
-        if get_consent('OK to start downloading {len(media_sources)} media files?'):
-            download_larger_media(media_sources, log_path)
+        estimated_download_time_str = format_duration(len(media_sources) * 0.4)
+
+        if get_consent(f'OK to start downloading {len(media_sources)} media files? '
+            f'This will take at least {estimated_download_time_str}.'):
+
+            download_larger_media(media_sources, paths)
             print('In case you set your account to public before initiating the download, '
                 'do not forget to protect it again.')
 
