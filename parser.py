@@ -442,6 +442,10 @@ def collect_tweet_references(tweet, known_tweets, counts):
     tweet = unwrap_tweet(tweet)
     tweet_ids = set()
 
+    # Don't search for tweet references if this tweet was not part of the original archive
+    if 'from_archive' not in tweet:
+        return tweet_ids
+
     # Collect quoted tweets
     if has_path(tweet, ['entities', 'urls']):
         for url in tweet['entities']['urls']:
