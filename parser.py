@@ -776,13 +776,13 @@ def download_larger_media(media_sources: dict, paths: PathConfig):
     while remaining_tries > 0:
         number_of_files = len(media_sources)
         success_count = 0
-        retries = []
+        retries = {}
         for index, (local_media_path, media_url) in enumerate(media_sources.items()):
             success, bytes_downloaded = download_file_if_larger(media_url, local_media_path, index + 1, number_of_files, sleep_time)
             if success:
                 success_count += 1
             else:
-                retries.append((local_media_path, media_url))
+                retries[local_media_path] = media_url
             total_bytes_downloaded += bytes_downloaded
 
             # show % done and estimated remaining time:
