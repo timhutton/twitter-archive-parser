@@ -210,18 +210,25 @@ def lookup_users(user_ids, users):
     if not get_consent(f'Download user data from Twitter (approx {estimated_size:,} KB)?'):
         return
 
+    # stores ALL the downloaded user data
+    extended_user_data: dict = {}
+
     requests = import_module('requests')
     try:
         with requests.Session() as session:
             bearer_token = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
             guest_token = get_twitter_api_guest_token(session, bearer_token)
             retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
+            for user_id, user_info in retrieved_users.items():
+                extended_user_data[user_id] = user_info
             for user_id, user in retrieved_users.items():
                 if user["screen_name"] is not None:
                     users[user_id] = UserData(user_id=user_id, handle=user["screen_name"])
         print()  # empty line for better readability of output
     except Exception as err:
         print(f'Failed to download user data: {err}')
+
+    return extended_user_data
 
 
 def read_json_from_js_file(filename):
@@ -1296,9 +1303,9 @@ def migrate_old_output(paths: PathConfig):
             print(f"Files have been deleted. New versions of these files will be generated into 'parser-output' soon.")
 
 
-def export_user_data(users: dict, paths: PathConfig):
+def export_user_data(users: dict, extended_user_data: dict, paths: PathConfig):
     """
-    save users dict to a JSON file
+    save users dict and extended user data to JSON files
     """
     users_dicts: list[dict] = [user_data.to_dict() for user_data in users.values()]
     users_json: str = json.dumps(users_dicts, indent=2)
@@ -1306,6 +1313,12 @@ def export_user_data(users: dict, paths: PathConfig):
         print(f'saving {len(users_dicts)} sets of user data to user_data_cache.json ...')
         users_file.write(users_json)
         print('user data saved.\n')
+
+    extended_users_json: str = json.dumps(extended_user_data, indent=2)
+    with open(os.path.join(paths.dir_output_cache, 'extended_user_data_cache.json'), 'w') as extended_users_file:
+        print(f'saving {len(extended_user_data.keys())} sets of extended user data to extended_user_data_cache.json ...')
+        extended_users_file.write(extended_users_json)
+        print('extended user data saved.\n')
 
 
 def main():
@@ -1386,9 +1399,9 @@ def main():
                            f'in the online lookup of user handles anyway?', default_to_yes=True):
             collected_user_ids = collected_user_ids_without_followers
 
-    lookup_users(collected_user_ids, users)
+    extended_user_data = lookup_users(collected_user_ids, users)
 
-    export_user_data(users, paths)
+    export_user_data(users, extended_user_data, paths)
 
     parse_followings(users, user_id_url_template, paths)
     parse_followers(users, user_id_url_template, paths)
