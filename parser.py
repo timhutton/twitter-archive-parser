@@ -50,6 +50,12 @@ class UserData:
             raise ValueError('handle "None" is not allowed in UserData.')
         self.handle = handle
 
+    def to_dict(self) -> dict:
+        return {
+            'user_id': self.user_id,
+            'handle': self.handle,
+        }
+
 
 class PathConfig:
     """
@@ -1290,6 +1296,18 @@ def migrate_old_output(paths: PathConfig):
             print(f"Files have been deleted. New versions of these files will be generated into 'parser-output' soon.")
 
 
+def export_user_data(users: dict, paths: PathConfig):
+    """
+    save users dict to a JSON file
+    """
+    users_dicts: list[dict] = [user_data.to_dict() for user_data in users.values()]
+    users_json: str = json.dumps(users_dicts, indent=2)
+    with open(os.path.join(paths.dir_output_cache, 'user_data_cache.json'), 'w') as users_file:
+        print(f'saving {len(users_dicts)} sets of user data to user_data_cache.json ...')
+        users_file.write(users_json)
+        print('user data saved.\n')
+
+
 def main():
     paths = PathConfig(dir_archive='.')
 
@@ -1369,6 +1387,8 @@ def main():
             collected_user_ids = collected_user_ids_without_followers
 
     lookup_users(collected_user_ids, users)
+
+    export_user_data(users, paths)
 
     parse_followings(users, user_id_url_template, paths)
     parse_followers(users, user_id_url_template, paths)
