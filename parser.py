@@ -45,8 +45,12 @@ f' Error: This script requires Python 3.6 or later. Use `python --version` to ch
 
 
 class UserData:
-    def __init__(self, id, handle = None):
-        self.id = id
+    def __init__(self, user_id: str, handle: str):
+        if user_id is None:
+            raise ValueError('ID "None" is not allowed in UserData.')
+        self.user_id = user_id
+        if handle is None:
+            raise ValueError('handle "None" is not allowed in UserData.')
         self.handle = handle
 
 
@@ -270,7 +274,8 @@ def lookup_users(user_ids, users):
             guest_token = get_twitter_api_guest_token(session, bearer_token)
             retrieved_users = get_twitter_users(session, bearer_token, guest_token, filtered_user_ids)
             for user_id, user in retrieved_users.items():
-                users[user_id] = UserData(user_id, user["screen_name"])
+                if user["screen_name"] is not None:
+                    users[user_id] = UserData(user_id=user_id, handle=user["screen_name"])
         print()  # empty line for better readability of output
     except Exception as err:
         print(f'Failed to download user data: {err}')
@@ -632,17 +637,20 @@ def convert_tweet(tweet, username, media_sources: dict, users, referenced_tweets
     body_html = header_html + body_html + f'<a href="{original_tweet_url}"><img src="{icon_url}" ' \
                                           f'width="12" />&nbsp;{timestamp_str}</a></p>'
     # extract user_id:handle connections
-    if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet:
-        id = tweet['in_reply_to_user_id']
-        if id is not None and int(id) >= 0: # some ids are -1, not sure why
+    if 'in_reply_to_user_id' in tweet and 'in_reply_to_screen_name' in tweet and \
+            tweet['in_reply_to_screen_name'] is not None:
+        reply_to_id = tweet['in_reply_to_user_id']
+        if int(reply_to_id) >= 0:  # some ids are -1, not sure why
             handle = tweet['in_reply_to_screen_name']
-            users[id] = UserData(id=id, handle=handle)
+            users[reply_to_id] = UserData(user_id=reply_to_id, handle=handle)
     if 'entities' in tweet and 'user_mentions' in tweet['entities'] and tweet['entities']['user_mentions'] is not None:
         for mention in tweet['entities']['user_mentions']:
-            id = mention['id']
-            if int(id) >= 0: # some ids are -1, not sure why
-                handle = mention['screen_name']
-                users[id] = UserData(id=id, handle=handle)
+            if mention is not None and 'id' in mention and 'screen_name' in mention:
+                mentioned_id = mention['id']
+                if int(mentioned_id) >= 0:  # some ids are -1, not sure why
+                    handle = mention['screen_name']
+                    if handle is not None:
+                        users[mentioned_id] = UserData(user_id=mentioned_id, handle=handle)
 
     return timestamp, body_markdown, body_html
 
@@ -1260,6 +1268,9 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
             group_conversations_metadata[conversation_id]['participant_names'] = participant_names
             group_conversations_metadata[conversation_id]['conversation_names'] = [(0, conversation_id)]
             group_conversations_metadata[conversation_id]['participant_message_count'] = defaultdict(int)
+            for participant_id in participants:
+                # init every participant's message count with 0, so that users with no activity are not ignored
+                group_conversations_metadata[conversation_id]['participant_message_count'][participant_id] = 0
             messages = []
             if 'messages' in dm_conversation:
                 for message in dm_conversation['messages']:
@@ -1455,6 +1466,8 @@ def parse_group_direct_messages(username, users, user_id_url_template, paths):
                     participant_handle = users[participant_id].handle
                     if participant_handle != username:
                         handles.append((participant_handle, message_count))
+            # sort alphabetically by handle first, for a more deterministic order
+            handles.sort(key=lambda tup: tup[0])
             # sort so that the most active users are at the start of the list
             handles.sort(key=lambda tup: tup[1], reverse=True)
             if len(handles) == 1:
@@ -1531,7 +1544,6 @@ def migrate_old_output(paths: PathConfig):
             print(f"Moving {len(files_to_move)} files from 'media' to '{paths.dir_output_media}'")
             for file_path_to_move in files_to_move:
                 file_name_to_move = os.path.split(file_path_to_move)[1]
-                print(file_name_to_move)
                 os.rename(file_path_to_move, os.path.join(paths.dir_output_media, file_name_to_move))
         os.rmdir(os.path.join(paths.dir_archive, "media"))
 
